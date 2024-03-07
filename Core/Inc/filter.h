@@ -9,9 +9,9 @@ typedef struct{
 	uint16_t counter;
 	int16_t out;
 	int32_t sum;
-}mov_aver_intance_int16;
+} filterObj;
 
-void reset_average_filter(mov_aver_intance_int16* instance);
-void apply_average_filter(mov_aver_intance_int16* instance, int16_t input, int16_t *out);
+void reset_average_filter(filterObj* instance);
+void apply_average_filter(filterObj* instance, int16_t input, int16_t *out);
 
 #endif /* INC_MOVING_AVERAGE_INT16_H_ */

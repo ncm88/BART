@@ -54,6 +54,7 @@ void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
 
+
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
@@ -69,7 +70,11 @@ void Error_Handler(void);
 #define VCP_RX_GPIO_Port GPIOA
 
 /* USER CODE BEGIN Private defines */
-
+#define UPDATE_RATE 1000
+#define MOTOR1_DIR_Pin GPIO_PIN_10
+#define MOTOR1_DIR_GPIO_Port GPIOA
+#define MOTOR2_DIR_Pin GPIO_PIN_11
+#define MOTOR2_DIR_GPIO_Port GPIOA
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus
