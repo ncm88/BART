@@ -17,12 +17,12 @@ void update_encoder(encoder_instance* handle, TIM_HandleTypeDef* htim)
 		
 		else if(current_pos > handle->prevPos){
 			if (__HAL_TIM_IS_TIM_COUNTING_DOWN(htim)) handle->velocity = (-1) * handle->prevPos - (__HAL_TIM_GET_AUTORELOAD(htim) - current_pos);
-            else handle ->velocity = current_pos - handle ->prevPos;
+            else handle->velocity = current_pos - handle->prevPos;
 		}
 
 		else{
-			if (__HAL_TIM_IS_TIM_COUNTING_DOWN(htim)) handle ->velocity = current_pos - handle ->prevPos;
-			else handle ->velocity = current_pos + (__HAL_TIM_GET_AUTORELOAD(htim) - handle ->prevPos);
+			if (__HAL_TIM_IS_TIM_COUNTING_DOWN(htim)) handle->velocity = current_pos - handle->prevPos;
+			else handle->velocity = current_pos + (__HAL_TIM_GET_AUTORELOAD(htim) - handle->prevPos);
 		}
 	}
 
