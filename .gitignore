@@ -1,0 +1,9 @@
+*.project*
+.cproject*
+*.cfg
+.settings/
+.vscode/
+Debug/
+build/
+*VSCODE*
+STM32Make.make
