@@ -21,6 +21,7 @@
 #include "tim.h"
 #include "usart.h"
 #include "gpio.h"
+
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "encoder.h"
@@ -65,57 +66,6 @@ int16_t motor1_vel, motor2_vel;
 int32_t encoder_position;
 uint16_t timer_counter;
 
-//motor 1: encoder-htim2, output-htim16
-//motor 2: encoder-htim3, output-htim17
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){   //predefined function override
-	if(htim->Instance == TIM6){
-	  // measure velocity
-	  update_encoder(&enc_instance_mot1, &htim2);
-    update_encoder(&enc_instance_mot2, &htim3);
-
-	  // applying filter
-	  apply_average_filter(&filter_instance1, enc_instance_mot1.velocity, &motor1_vel);
-    apply_average_filter(&filter_instance2, enc_instance_mot2.velocity, &motor2_vel);
-
-	  if(pid_instance_mot1.d_gain != 0 || pid_instance_mot1.p_gain != 0 || pid_instance_mot1.i_gain != 0){
-		  // PID apply
-		  apply_pid(&pid_instance_mot1, MOTOR_VEL_REFERENCE - motor1_vel, UPDATE_RATE);
-
-		  // PWM
-		  if(pid_instance_mot1.output > 0){
-			  __HAL_TIM_SET_COMPARE(&htim16, TIM_CHANNEL_1, pid_instance_mot1.output);
-			  HAL_GPIO_WritePin(MOTOR1_DIR_GPIO_Port, MOTOR1_DIR_Pin, GPIO_PIN_SET);
-		  }
-		
-      else{
-        __HAL_TIM_SET_COMPARE(&htim16, TIM_CHANNEL_1, (-1) * pid_instance_mot1.output);
-		    HAL_GPIO_WritePin(MOTOR1_DIR_GPIO_Port, MOTOR1_DIR_Pin, GPIO_PIN_RESET);
-		  }
-	  }
-	
-
-    if(pid_instance_mot2.d_gain != 0 || pid_instance_mot2.p_gain != 0 || pid_instance_mot2.i_gain != 0){
-		  // PID apply
-		  apply_pid(&pid_instance_mot2, MOTOR_VEL_REFERENCE - motor2_vel, UPDATE_RATE);
-
-		  // PWM
-		  if(pid_instance_mot2.output > 0){
-			  __HAL_TIM_SET_COMPARE(&htim17, TIM_CHANNEL_1, pid_instance_mot2.output);
-			  HAL_GPIO_WritePin(MOTOR1_DIR_GPIO_Port, MOTOR1_DIR_Pin, GPIO_PIN_SET);
-		  }
-		
-      else{
-        __HAL_TIM_SET_COMPARE(&htim17, TIM_CHANNEL_1, (-1) * pid_instance_mot2.output);
-		    HAL_GPIO_WritePin(MOTOR1_DIR_GPIO_Port, MOTOR1_DIR_Pin, GPIO_PIN_RESET);
-		  }
-	  }
-
-
-
-    else __HAL_TIM_SET_COMPARE(&htim16, TIM_CHANNEL_1, 2000);
-  }
-}
-
 
 
 /* USER CODE END 0 */
@@ -136,7 +86,6 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
-
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -155,6 +104,7 @@ int main(void)
   MX_USART2_UART_Init();
   MX_TIM6_Init();
   /* USER CODE BEGIN 2 */
+  HAL_TIM_Base_Start_IT(&htim6); //start ISR timer in interrupt mode
 
   /* USER CODE END 2 */
 
@@ -163,6 +113,9 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
+    //HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_8);
+	  //HAL_Delay(2000);
+
 
     /* USER CODE BEGIN 3 */
   }
@@ -206,6 +159,65 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+
+
+//motor 1: encoder-htim2, output-htim16
+//motor 2: encoder-htim3, output-htim17
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){   //predefined function override
+
+  if(htim->Instance == TIM6){
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_SET);
+    
+    //HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_8);
+    
+    // measure velocity
+	  update_encoder(&enc_instance_mot1, &htim2);
+    update_encoder(&enc_instance_mot2, &htim3);
+
+	  // applying filter
+	  apply_average_filter(&filter_instance1, enc_instance_mot1.velocity, &motor1_vel);
+    apply_average_filter(&filter_instance2, enc_instance_mot2.velocity, &motor2_vel);
+
+	  if(pid_instance_mot1.d_gain != 0 || pid_instance_mot1.p_gain != 0 || pid_instance_mot1.i_gain != 0){
+		  // PID apply
+		  apply_pid(&pid_instance_mot1, MOTOR_VEL_REFERENCE - motor1_vel, UPDATE_RATE);
+
+		  // PWM
+		  if(pid_instance_mot1.output > 0){
+			  __HAL_TIM_SET_COMPARE(&htim16, TIM_CHANNEL_1, pid_instance_mot1.output);
+			  HAL_GPIO_WritePin(MOTOR1_DIR_GPIO_Port, MOTOR1_DIR_Pin, GPIO_PIN_SET);
+		  }
+		
+      else{
+        __HAL_TIM_SET_COMPARE(&htim16, TIM_CHANNEL_1, (-1) * pid_instance_mot1.output);
+		    HAL_GPIO_WritePin(MOTOR1_DIR_GPIO_Port, MOTOR1_DIR_Pin, GPIO_PIN_RESET);
+		  }
+	  }
+	
+
+    if(pid_instance_mot2.d_gain != 0 || pid_instance_mot2.p_gain != 0 || pid_instance_mot2.i_gain != 0){
+		  // PID apply
+		  apply_pid(&pid_instance_mot2, MOTOR_VEL_REFERENCE - motor2_vel, UPDATE_RATE);
+
+		  // PWM
+		  if(pid_instance_mot2.output > 0){
+			  __HAL_TIM_SET_COMPARE(&htim17, TIM_CHANNEL_1, pid_instance_mot2.output);
+			  HAL_GPIO_WritePin(MOTOR1_DIR_GPIO_Port, MOTOR1_DIR_Pin, GPIO_PIN_SET);
+		  }
+		
+      else{
+        __HAL_TIM_SET_COMPARE(&htim17, TIM_CHANNEL_1, (-1) * pid_instance_mot2.output);
+		    HAL_GPIO_WritePin(MOTOR1_DIR_GPIO_Port, MOTOR1_DIR_Pin, GPIO_PIN_RESET);
+		  }
+	  }
+
+
+    else __HAL_TIM_SET_COMPARE(&htim16, TIM_CHANNEL_1, 2000);
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_RESET);
+  }
+}
+
+
 
 /* USER CODE END 4 */
 
