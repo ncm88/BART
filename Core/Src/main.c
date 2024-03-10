@@ -45,6 +45,7 @@
 #define ON 1
 #define OFF 0
 #define ADC_BUF_LEN 4096
+#define MOTOR_VEL_REFERENCE 60
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -58,16 +59,15 @@
 encoder_instance enc_instance_mot1, enc_instance_mot2;
 static pid_instance_int16 pid_instance_mot1, pid_instance_mot2;
 moving_avg_obj filter_instance1, filter_instance2, sampleFilter;
-uint16_t raw;
-uint16_t filteredRaw;
-float convertedRaw;
-float convertedFiltered;
 char msg[100];
 volatile bool uart_flag;
-volatile bool adc_flag;
-char testmsg[] = "howdy partner 69\r\n";
-uint16_t adc_buf[ADC_BUF_LEN];
 
+uint16_t adc_buf[ADC_BUF_LEN];
+int16_t motor1_vel, motor2_vel;
+int32_t encoder_position;
+uint16_t timer_counter;
+uint16_t latest_adc_value;
+uint16_t filtered_adc_value;
 
 /* USER CODE END PV */
 
@@ -79,12 +79,6 @@ void SystemClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-
-#define MOTOR_VEL_REFERENCE 60
-int16_t motor1_vel, motor2_vel;
-int32_t encoder_position;
-uint16_t timer_counter;
-
 
 
 /* USER CODE END 0 */
@@ -128,7 +122,6 @@ int main(void)
   HAL_TIM_Base_Start_IT(&htim6); //start ISR timer in interrupt mode
   HAL_DMA_RegisterCallback(&hdma_usart2_tx, HAL_DMA_XFER_CPLT_CB_ID, &DMATransferComplete);
   HAL_ADC_Start_DMA(&hadc1, (uint32_t*)adc_buf, ADC_BUF_LEN);
-  HAL_DMA_RegisterCallback(&hdma_adc1, HAL_DMA_XFER_CPLT_CB_ID, &ADCTransferComplete);
 
   /* USER CODE END 2 */
 
@@ -136,50 +129,26 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    /*
-    if(adc_flag == ON){
-      HAL_ADC_Start(&hadc1);
-      HAL_ADC_PollForConversion(&hadc1, 1);
-      raw = HAL_ADC_GetValue(&hadc1);
-      apply_average_filter_unsigned(&sampleFilter, raw, &filteredRaw);
-      memset(msg, 0, sizeof(msg));
-      sprintf(msg, "%hu  %hu\n", raw, filteredRaw);
-     
-      __disable_irq();
-      adc_flag = OFF;
-      __enable_irq();
-    }
-    */
-    
-
-
-    
-    if(uart_flag == ON){
+    if (uart_flag == ON) {
       huart2.Instance->CR3 |= USART_CR3_DMAT;
+
+      // Calculate the integer and fractional parts for the ADC value
+      int adc_value_int = (int)(latest_adc_value * SCALE_FACTOR);
+      int adc_value_frac = (int)((latest_adc_value * SCALE_FACTOR - adc_value_int) * 10000);  // Assuming two decimal points precision
+
+      // Calculate the integer and fractional parts for the filtered value
+      int filtered_value_int = (int)(filtered_adc_value * SCALE_FACTOR);
+      int filtered_value_frac = (int)((filtered_adc_value * SCALE_FACTOR - filtered_value_int) * 10000);  // Assuming two decimal points precision
+
+      // Format the message without using floating point in sprintf
+      sprintf(msg, "ADC Value: %d.%04dV    Filtered Value: %d.%04dV \r\n", adc_value_int, adc_value_frac, filtered_value_int, filtered_value_frac);
+
       HAL_DMA_Start_IT(&hdma_usart2_tx, (uint32_t)msg, (uint32_t)&huart2.Instance->TDR, strlen(msg));
       uart_flag = OFF;
     }
-    
-    
 
-    //HAL_Delay(5);
-    
-      
-      /*
-      HAL_UART_Transmit_IT(&huart2, (uint8_t*)msg, strlen(msg));
-      
-      __disable_irq();
-      uart_flag = OFF;
-      __enable_irq();
-      */
    
     
-    
-    /* USER CODE END WHILE */
-
-    /* USER CODE BEGIN 3 */
-    
-
   }
   /* USER CODE END 3 */
 }
@@ -231,20 +200,6 @@ void SystemClock_Config(void)
 
 /* USER CODE BEGIN 4 */
 
-// Callback function when ADC DMA transfer is complete
-void ADCTransferComplete(DMA_HandleTypeDef *hdma) {
-    // Assuming you want the last ADC value
-    uint16_t latest_adc_value = adc_buf[ADC_BUF_LEN - 1];
-    
-    // Convert the latest ADC value to a string, for example
-    sprintf(msg, "ADC Value: %hu\r\n", latest_adc_value);
-    
-    // Now, transmit this message over USART using DMA
-    //HAL_UART_Transmit_DMA(&huart2, (uint8_t*)msg, strlen(msg));
-}
-
-
-
 void DMATransferComplete(DMA_HandleTypeDef* hdma){
   huart2.Instance->CR3 &= ~USART_CR3_DMAT;
 }
@@ -256,11 +211,15 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){   //predefined func
 
   if(htim->Instance == TIM6){
     
+    //TEST BLOCK-------------------------------------------------------------------------------
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_SET); //Blink test wrapper
-
-    adc_flag = ON;
-    uart_flag = ON;
     
+    uart_flag = ON;
+    latest_adc_value = adc_buf[ADC_BUF_LEN -1];
+    apply_average_filter_unsigned(&sampleFilter, latest_adc_value, &filtered_adc_value);
+    //END OF TEST BLOCK-----------------------------------------------------------------------
+
+
     // measure velocity
 	  update_encoder(&enc_instance_mot1, &htim2);
     update_encoder(&enc_instance_mot2, &htim3);

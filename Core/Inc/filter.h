@@ -3,7 +3,8 @@
 
 #include "stdint.h"
 
-#define MOVING_AVERAGE_LENGTH  20
+#define MOVING_AVERAGE_LENGTH  100
+
 typedef struct{
 	int16_t buffer[MOVING_AVERAGE_LENGTH];
 	uint16_t counter;
