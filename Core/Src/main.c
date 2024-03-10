@@ -18,6 +18,8 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "adc.h"
+#include "dma.h"
 #include "tim.h"
 #include "usart.h"
 #include "gpio.h"
@@ -27,6 +29,9 @@
 #include "encoder.h"
 #include "pid.h"
 #include "filter.h"
+#include <stdio.h>
+#include <string.h>
+#include <stdbool.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -36,7 +41,10 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define SCALE_FACTOR 3.3/4096
+#define ON 1
+#define OFF 0
+#define ADC_BUF_LEN 4096
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -49,7 +57,18 @@
 /* USER CODE BEGIN PV */
 encoder_instance enc_instance_mot1, enc_instance_mot2;
 static pid_instance_int16 pid_instance_mot1, pid_instance_mot2;
-filterObj filter_instance1, filter_instance2;
+moving_avg_obj filter_instance1, filter_instance2, sampleFilter;
+uint16_t raw;
+uint16_t filteredRaw;
+float convertedRaw;
+float convertedFiltered;
+char msg[100];
+volatile bool uart_flag;
+volatile bool adc_flag;
+char testmsg[] = "howdy partner 69\r\n";
+uint16_t adc_buf[ADC_BUF_LEN];
+
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -92,19 +111,24 @@ int main(void)
   SystemClock_Config();
 
   /* USER CODE BEGIN SysInit */
-
+  HAL_UART_MspInit(&huart2);
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_TIM2_Init();
   MX_TIM3_Init();
   MX_TIM16_Init();
   MX_TIM17_Init();
   MX_USART2_UART_Init();
   MX_TIM6_Init();
+  MX_ADC1_Init();
   /* USER CODE BEGIN 2 */
   HAL_TIM_Base_Start_IT(&htim6); //start ISR timer in interrupt mode
+  HAL_DMA_RegisterCallback(&hdma_usart2_tx, HAL_DMA_XFER_CPLT_CB_ID, &DMATransferComplete);
+  HAL_ADC_Start_DMA(&hadc1, (uint32_t*)adc_buf, ADC_BUF_LEN);
+  HAL_DMA_RegisterCallback(&hdma_adc1, HAL_DMA_XFER_CPLT_CB_ID, &ADCTransferComplete);
 
   /* USER CODE END 2 */
 
@@ -112,12 +136,50 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    /* USER CODE END WHILE */
-    //HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_8);
-	  //HAL_Delay(2000);
+    /*
+    if(adc_flag == ON){
+      HAL_ADC_Start(&hadc1);
+      HAL_ADC_PollForConversion(&hadc1, 1);
+      raw = HAL_ADC_GetValue(&hadc1);
+      apply_average_filter_unsigned(&sampleFilter, raw, &filteredRaw);
+      memset(msg, 0, sizeof(msg));
+      sprintf(msg, "%hu  %hu\n", raw, filteredRaw);
+     
+      __disable_irq();
+      adc_flag = OFF;
+      __enable_irq();
+    }
+    */
+    
 
+
+    
+    if(uart_flag == ON){
+      huart2.Instance->CR3 |= USART_CR3_DMAT;
+      HAL_DMA_Start_IT(&hdma_usart2_tx, (uint32_t)msg, (uint32_t)&huart2.Instance->TDR, strlen(msg));
+      uart_flag = OFF;
+    }
+    
+    
+
+    //HAL_Delay(5);
+    
+      
+      /*
+      HAL_UART_Transmit_IT(&huart2, (uint8_t*)msg, strlen(msg));
+      
+      __disable_irq();
+      uart_flag = OFF;
+      __enable_irq();
+      */
+   
+    
+    
+    /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+    
+
   }
   /* USER CODE END 3 */
 }
@@ -130,6 +192,7 @@ void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+  RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
 
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
@@ -137,7 +200,9 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
   RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
-  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
+  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL4;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     Error_Handler();
@@ -156,9 +221,33 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_ADC12;
+  PeriphClkInit.Adc12ClockSelection = RCC_ADC12PLLCLK_DIV1;
+  if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
+  {
+    Error_Handler();
+  }
 }
 
 /* USER CODE BEGIN 4 */
+
+// Callback function when ADC DMA transfer is complete
+void ADCTransferComplete(DMA_HandleTypeDef *hdma) {
+    // Assuming you want the last ADC value
+    uint16_t latest_adc_value = adc_buf[ADC_BUF_LEN - 1];
+    
+    // Convert the latest ADC value to a string, for example
+    sprintf(msg, "ADC Value: %hu\r\n", latest_adc_value);
+    
+    // Now, transmit this message over USART using DMA
+    //HAL_UART_Transmit_DMA(&huart2, (uint8_t*)msg, strlen(msg));
+}
+
+
+
+void DMATransferComplete(DMA_HandleTypeDef* hdma){
+  huart2.Instance->CR3 &= ~USART_CR3_DMAT;
+}
 
 
 //motor 1: encoder-htim2, output-htim16
@@ -166,9 +255,11 @@ void SystemClock_Config(void)
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){   //predefined function override
 
   if(htim->Instance == TIM6){
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_SET);
     
-    //HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_8);
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_SET); //Blink test wrapper
+
+    adc_flag = ON;
+    uart_flag = ON;
     
     // measure velocity
 	  update_encoder(&enc_instance_mot1, &htim2);
@@ -213,7 +304,8 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){   //predefined func
 
 
     else __HAL_TIM_SET_COMPARE(&htim16, TIM_CHANNEL_1, 2000);
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_RESET);
+    
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_RESET); //End of test wrapper
   }
 }
 

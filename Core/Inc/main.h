@@ -53,8 +53,8 @@ extern "C" {
 void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
-
-
+void DMATransferComplete(DMA_HandleTypeDef* hdma);
+void ADCTransferComplete(DMA_HandleTypeDef *hdma);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
