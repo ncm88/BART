@@ -54,6 +54,7 @@ void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
 void DMATransferComplete(DMA_HandleTypeDef* hdma);
+void TIM7_Init(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
