@@ -62,7 +62,7 @@ inline void apply_average_filter_unsigned(moving_avg_obj* instance, uint16_t inp
 
 
 void apply_ema_filter(ema_obj* instance, uint16_t input, float* out){
-	static double Rn[EMA_LENGTH] = RN_VALUES_10;
+	static double Rn[EMA_LENGTH] = RN_VALUES_30;
 	static uint8_t count = 0;
 	if(count<EMA_LENGTH) count++;
 	

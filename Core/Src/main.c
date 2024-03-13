@@ -61,11 +61,18 @@
 encoder_instance enc_instance_mot1, enc_instance_mot2;
 static pid_instance_int16 pid_instance_mot1, pid_instance_mot2;
 moving_avg_obj filter_instance1, filter_instance2, sampleFilter;
+
+ema_obj m2_ema;
+
+
 char msg[150];
 volatile bool uart_flag;
 
 uint16_t adc_buf[ADC_BUF_LEN];
+
 float motor1_vel, motor2_vel;
+float m2_vel_ema;
+
 int32_t encoder_position;
 uint16_t timer_counter;
 uint16_t latest_adc_value;
@@ -255,6 +262,8 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){   //predefined func
 	  apply_average_filter(&filter_instance1, enc_instance_mot1.velocity, &motor1_vel);
     apply_average_filter(&filter_instance2, enc_instance_mot2.velocity, &motor2_vel);
 
+    //EMA FILTER COMPARISON TEST
+    apply_ema_filter(&m2_ema, enc_instance_mot2.velocity, &m2_vel_ema);
 
 	  if(pid_instance_mot1.d_gain != 0 || pid_instance_mot1.p_gain != 0 || pid_instance_mot1.i_gain != 0){
 		  // PID apply
