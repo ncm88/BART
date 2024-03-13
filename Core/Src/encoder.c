@@ -16,7 +16,7 @@ void update_encoder(encoder_instance* handle, TIM_HandleTypeDef* htim)
         if(current_pos == handle->prevPos) handle->velocity = 0;
 		
 		else if(current_pos > handle->prevPos){
-			if (__HAL_TIM_IS_TIM_COUNTING_DOWN(htim)) handle->velocity = (-1) * handle->prevPos - (__HAL_TIM_GET_AUTORELOAD(htim) - current_pos);
+			if (__HAL_TIM_IS_TIM_COUNTING_DOWN(htim)) handle->velocity = current_pos - (handle->prevPos + __HAL_TIM_GetAutoreload(htim));
             else handle->velocity = current_pos - handle->prevPos;
 		}
 

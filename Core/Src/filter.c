@@ -10,6 +10,7 @@ void reset_average_filter(moving_avg_obj* instance)
 	}
 }
 
+
 void apply_average_filter(moving_avg_obj* instance, int16_t input, int16_t* out)
 {
 	static int16_t count = 0;
@@ -28,7 +29,9 @@ void apply_average_filter(moving_avg_obj* instance, int16_t input, int16_t* out)
 }
 
 
-void apply_average_filter_unsigned(moving_avg_obj* instance, uint16_t input, uint16_t* out)
+
+
+inline void apply_average_filter_unsigned(moving_avg_obj* instance, uint16_t input, uint16_t* out)
 {
 	static int16_t count = 0;
     if(count < MOVING_AVERAGE_LENGTH) count++;

@@ -7,8 +7,8 @@
 
 typedef struct{
     int16_t velocity;
-    int64_t position;
-    uint32_t prevPos;
+    uint16_t position;
+    uint16_t prevPos;
 } encoder_instance;
 
 

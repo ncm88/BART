@@ -78,6 +78,10 @@ uint16_t mlEnd = 1;
 uint16_t ISR_Utilization;
 
 uint16_t angle;
+int16_t vel_raw;
+int16_t vel_filtered;
+moving_avg_obj test;
+
 
 /* USER CODE END PV */
 
@@ -238,16 +242,24 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){   //predefined func
     
     //TEST BLOCK-------------------------------------------------------------------------------
     isrStart = TIM7->CNT;
-    
+    static uint16_t prev = 0;
+
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_SET); //Blink test wrapper
 
     uart_flag = ON;
     latest_adc_value = adc_buf[ADC_BUF_LEN - 1];
     apply_average_filter_unsigned(&sampleFilter, latest_adc_value, &filtered_adc_value);
+
+    angle = __HAL_TIM_GET_COUNTER(&htim3);
+    
+    if(angle < prev) vel_raw = __HAL_TIM_GetAutoreload(&htim3) - (prev - angle);
+    else vel_raw = angle - prev;
+
+    apply_average_filter(&test, vel_raw, &vel_filtered);
+    prev = angle;
+
     //END OF TEST BLOCK-----------------------------------------------------------------------
 
-    
-    angle = __HAL_TIM_GET_COUNTER(&htim3);
 
     // measure velocity
 	  update_encoder(&enc_instance_mot1, &htim2);
@@ -256,6 +268,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){   //predefined func
 	  // applying filter
 	  apply_average_filter(&filter_instance1, enc_instance_mot1.velocity, &motor1_vel);
     apply_average_filter(&filter_instance2, enc_instance_mot2.velocity, &motor2_vel);
+
 
 	  if(pid_instance_mot1.d_gain != 0 || pid_instance_mot1.p_gain != 0 || pid_instance_mot1.i_gain != 0){
 		  // PID apply
@@ -299,6 +312,13 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){   //predefined func
 
 
 
+void TIM3_Init(void){
+  TIM3->CR1 |= 1;
+}
+
+
+
+
 //Had to write this because HAL functionality for TIM7 wasn't working
 void TIM7_Init(void) {
     // Step 1: Enable clock for TIM7
@@ -319,14 +339,6 @@ void TIM7_Init(void) {
     // NVIC_EnableIRQ(TIM7_IRQn);
     // NVIC_SetPriority(TIM7_IRQn, priority); // Set the desired priority
 }
-
-
-void TIM3_Init(void){
-  TIM3->CR1 |= 1;
-}
-
-
-
 
 
 
