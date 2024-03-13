@@ -77,11 +77,6 @@ uint16_t mlStart = 1;
 uint16_t mlEnd = 1;
 uint16_t ISR_Utilization;
 
-uint16_t angle;
-int16_t vel_raw;
-float vel_filtered;
-moving_avg_obj test;
-
 
 /* USER CODE END PV */
 
@@ -242,21 +237,12 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){   //predefined func
     
     //TEST BLOCK-------------------------------------------------------------------------------
     isrStart = TIM7->CNT;
-    static uint16_t prev = 0;
 
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_SET); //Blink test wrapper
 
     uart_flag = ON;
     latest_adc_value = adc_buf[ADC_BUF_LEN - 1];
     apply_average_filter_unsigned(&sampleFilter, latest_adc_value, &filtered_adc_value);
-
-    angle = __HAL_TIM_GET_COUNTER(&htim3);
-    
-    if(angle < prev) vel_raw = __HAL_TIM_GetAutoreload(&htim3) - (prev - angle);
-    else vel_raw = angle - prev;
-
-    apply_average_filter(&test, vel_raw, &vel_filtered);
-    prev = angle;
 
     //END OF TEST BLOCK-----------------------------------------------------------------------
 
