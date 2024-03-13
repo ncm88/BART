@@ -3,7 +3,7 @@
 
 void update_encoder(encoder_instance* handle, TIM_HandleTypeDef* htim)
 {
-	uint32_t current_pos = __HAL_TIM_GET_COUNTER(htim);
+	int16_t current_pos = __HAL_TIM_GET_COUNTER(htim);
 	static uint8_t first_time = 1;
 	
     if(first_time)
@@ -16,7 +16,7 @@ void update_encoder(encoder_instance* handle, TIM_HandleTypeDef* htim)
         if(current_pos == handle->prevPos) handle->velocity = 0;
 		
 		else if(current_pos > handle->prevPos){
-			if (__HAL_TIM_IS_TIM_COUNTING_DOWN(htim)) handle->velocity = current_pos - (handle->prevPos + __HAL_TIM_GetAutoreload(htim));
+			if (__HAL_TIM_IS_TIM_COUNTING_DOWN(htim)) handle->velocity = (-1) * handle->prevPos - (__HAL_TIM_GET_AUTORELOAD(htim) - current_pos);
             else handle->velocity = current_pos - handle->prevPos;
 		}
 
@@ -27,6 +27,11 @@ void update_encoder(encoder_instance* handle, TIM_HandleTypeDef* htim)
 	}
 
 	handle->position += handle->velocity;
+
+	if(handle->position > __HAL_TIM_GET_AUTORELOAD(htim)){
+		handle->position -= __HAL_TIM_GetAutoreload(htim);
+	}
+	
 	handle->prevPos = current_pos;
 }
 

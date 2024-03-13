@@ -65,7 +65,7 @@ char msg[150];
 volatile bool uart_flag;
 
 uint16_t adc_buf[ADC_BUF_LEN];
-int16_t motor1_vel, motor2_vel;
+float motor1_vel, motor2_vel;
 int32_t encoder_position;
 uint16_t timer_counter;
 uint16_t latest_adc_value;
@@ -79,7 +79,7 @@ uint16_t ISR_Utilization;
 
 uint16_t angle;
 int16_t vel_raw;
-int16_t vel_filtered;
+float vel_filtered;
 moving_avg_obj test;
 
 

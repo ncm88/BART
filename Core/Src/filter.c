@@ -11,7 +11,7 @@ void reset_average_filter(moving_avg_obj* instance)
 }
 
 
-void apply_average_filter(moving_avg_obj* instance, int16_t input, int16_t* out)
+void apply_average_filter(moving_avg_obj* instance, int16_t input, float* out)
 {
 	static int16_t count = 0;
     if(count < MOVING_AVERAGE_LENGTH) count++;
@@ -22,7 +22,7 @@ void apply_average_filter(moving_avg_obj* instance, int16_t input, int16_t* out)
 	
     if(instance->counter == MOVING_AVERAGE_LENGTH) instance->counter = 0;
 	
-	instance->out = instance->sum / count;
+	instance->out = (float)instance->sum / count;
 	
     // normalization
 	*out = instance->out;
