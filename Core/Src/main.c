@@ -77,6 +77,7 @@ uint16_t mlStart = 1;
 uint16_t mlEnd = 1;
 uint16_t ISR_Utilization;
 
+uint16_t angle;
 
 /* USER CODE END PV */
 
@@ -130,6 +131,7 @@ int main(void)
   MX_TIM7_Init();
   /* USER CODE BEGIN 2 */
   TIM7_Init();
+  TIM3_Init();
   HAL_TIM_Base_Start_IT(&htim6); //start ISR timer in interrupt mode
   HAL_DMA_RegisterCallback(&hdma_usart2_tx, HAL_DMA_XFER_CPLT_CB_ID, &DMATransferComplete);
   HAL_ADC_Start_DMA(&hadc1, (uint32_t*)adc_buf, ADC_BUF_LEN);
@@ -143,7 +145,10 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    
+
+    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_1);
+    //HAL_Delay(100);
+
     // Calculate the integer and fractional parts for the ADC value
     int adc_value_int = (int)(latest_adc_value * SCALE_FACTOR);
     int adc_value_frac = (int)((latest_adc_value * SCALE_FACTOR - adc_value_int) * 10000);  // Assuming two decimal points precision
@@ -168,6 +173,7 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+
   }
   /* USER CODE END 3 */
 }
@@ -232,14 +238,17 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){   //predefined func
     
     //TEST BLOCK-------------------------------------------------------------------------------
     isrStart = TIM7->CNT;
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_SET); //Blink test wrapper
     
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_SET); //Blink test wrapper
+
     uart_flag = ON;
     latest_adc_value = adc_buf[ADC_BUF_LEN - 1];
     apply_average_filter_unsigned(&sampleFilter, latest_adc_value, &filtered_adc_value);
     //END OF TEST BLOCK-----------------------------------------------------------------------
 
     
+    angle = __HAL_TIM_GET_COUNTER(&htim3);
+
     // measure velocity
 	  update_encoder(&enc_instance_mot1, &htim2);
     update_encoder(&enc_instance_mot2, &htim3);
@@ -283,6 +292,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){   //predefined func
     else __HAL_TIM_SET_COMPARE(&htim16, TIM_CHANNEL_1, 2000);
     
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_RESET); //End of test wrapper
+    
     isrEnd = TIM7->CNT; //get end time
   }
 }
@@ -309,6 +319,13 @@ void TIM7_Init(void) {
     // NVIC_EnableIRQ(TIM7_IRQn);
     // NVIC_SetPriority(TIM7_IRQn, priority); // Set the desired priority
 }
+
+
+void TIM3_Init(void){
+  TIM3->CR1 |= 1;
+}
+
+
 
 
 
