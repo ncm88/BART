@@ -25,11 +25,8 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "encoder.h"
-#include "pid.h"
+#include "pd.h"
 #include "filter.h"
-#include <stdio.h>
-#include <string.h>
-#include <stdbool.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -39,49 +36,29 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define TIM_7_MAX_TICKS
-#define SCALE_FACTOR 3.3/4096
 #define ON 1
 #define OFF 0
-#define ADC_BUF_LEN 4096
-#define MOTOR_VEL_REFERENCE 60
+#define KP 0.584
+#define KD 0.00136
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
-#define ABS_DIFF(A, B)((B > A)? (B - A) : (TIM_7_MAX_TICKS - (A - B)))
+
 
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-encoder_instance enc_instance_mot1, enc_instance_mot2;
-static pid_instance_int16 pid_instance_mot1, pid_instance_mot2;
-moving_avg_obj filter_instance1, filter_instance2, sampleFilter;
+static pd_instance_int16 pd_instance_mot1, pd_instance_mot2;
+moving_avg_obj filter_instance1, filter_instance2;
 
-ema_obj m2_ema;
+float motor1_error_derivative, motor2_error_derivative;
 
-
-char msg[150];
-volatile bool uart_flag;
-
-uint16_t adc_buf[ADC_BUF_LEN];
-
-float motor1_vel, motor2_vel;
-float m2_vel_ema;
-
-int32_t encoder_position;
-uint16_t timer_counter;
-uint16_t latest_adc_value;
-uint16_t filtered_adc_value;
-
-uint16_t isrStart = 1;
-uint16_t isrEnd = 1;
-uint16_t mlStart = 1;
-uint16_t mlEnd = 1;
-uint16_t ISR_Utilization;
-
+uint16_t xTarg, yTarg; //angular representation of target x and y cartesian coordinates
+static int16_t last_x_error = 0;
+static int16_t last_y_error = 0;
 
 /* USER CODE END PV */
 
@@ -131,9 +108,18 @@ int main(void)
   MX_USART2_UART_Init();
   MX_TIM6_Init();
   /* USER CODE BEGIN 2 */
-  TIM3_Init();
+  Decoder_Init();
+  set_pd_gain(&pd_instance_mot1, KP, KD);
+  set_pd_gain(&pd_instance_mot1, KP, KD);
 
 
+  //INSERT CALIBRATION CODE HERE----------------------------------------
+
+
+
+
+
+  //----------------------------------------------------------------------
 
 
   /* USER CODE END 2 */
@@ -142,7 +128,11 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-
+    
+    
+    
+    
+    
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -202,58 +192,54 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){   //predefined func
     
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_SET); //Blink test wrapper
 
-    //get position delta
-	  update_encoder(&enc_instance_mot1, &htim2);
-    update_encoder(&enc_instance_mot2, &htim3);
+    //get position error
+    int16_t xError = xTarg - __HAL_TIM_GET_COUNTER(&htim2);
+    int16_t yError = yTarg - __HAL_TIM_GET_COUNTER(&htim3);
 
-	  //apply average velocity filter
-	  apply_average_filter(&filter_instance1, enc_instance_mot1.velocity, &motor1_vel);
-    apply_average_filter(&filter_instance2, enc_instance_mot2.velocity, &motor2_vel);
+    //get error delta
+    int16_t deltaX = xError - last_x_error;
+    int16_t deltaY = yError - last_y_error;
+
+    //filter on error delta
+    apply_average_filter(&filter_instance1, deltaX, &motor1_error_derivative);
+    apply_average_filter(&filter_instance2, deltaY, &motor2_error_derivative);
+
+		// pd apply
+		apply_pd(&pd_instance_mot1, deltaX, motor1_error_derivative, SAMPLE_RATE);
+    apply_pd(&pd_instance_mot2, deltaY, motor2_error_derivative, SAMPLE_RATE);
 
 
-	  if(pid_instance_mot1.d_gain != 0 || pid_instance_mot1.p_gain != 0 || pid_instance_mot1.i_gain != 0){
-		  // PID apply
-		  apply_pid(&pid_instance_mot1, MOTOR_VEL_REFERENCE - motor1_vel, SAMPLE_RATE);
-
-		  // PWM
-		  if(pid_instance_mot1.output > 0){
-			  __HAL_TIM_SET_COMPARE(&htim16, TIM_CHANNEL_1, pid_instance_mot1.output);
-			  HAL_GPIO_WritePin(MOTOR1_DIR_GPIO_Port, MOTOR1_DIR_Pin, GPIO_PIN_SET);
-		  }
+		// PWM
+		if(pd_instance_mot1.output > 0){
+			__HAL_TIM_SET_COMPARE(&htim16, TIM_CHANNEL_1, pd_instance_mot1.output);
+			HAL_GPIO_WritePin(MOTOR1_DIR_GPIO_Port, MOTOR1_DIR_Pin, GPIO_PIN_SET);
+		}
+    else{
+      __HAL_TIM_SET_COMPARE(&htim16, TIM_CHANNEL_1, (-1) * pd_instance_mot1.output);
+		  HAL_GPIO_WritePin(MOTOR1_DIR_GPIO_Port, MOTOR1_DIR_Pin, GPIO_PIN_RESET);
+		}
+		if(pd_instance_mot2.output > 0){
+			__HAL_TIM_SET_COMPARE(&htim17, TIM_CHANNEL_1, pd_instance_mot2.output);    //GONNA NEED TO FIX THIS MOST LIKELY
+			HAL_GPIO_WritePin(MOTOR1_DIR_GPIO_Port, MOTOR1_DIR_Pin, GPIO_PIN_SET);
+		}
 		
-      else{
-        __HAL_TIM_SET_COMPARE(&htim16, TIM_CHANNEL_1, (-1) * pid_instance_mot1.output);
-		    HAL_GPIO_WritePin(MOTOR1_DIR_GPIO_Port, MOTOR1_DIR_Pin, GPIO_PIN_RESET);
-		  }
-	  }
-
-    if(pid_instance_mot2.d_gain != 0 || pid_instance_mot2.p_gain != 0 || pid_instance_mot2.i_gain != 0){
-		  // PID apply
-		  apply_pid(&pid_instance_mot2, MOTOR_VEL_REFERENCE - motor2_vel, SAMPLE_RATE);
-
-		  // PWM
-		  if(pid_instance_mot2.output > 0){
-			  __HAL_TIM_SET_COMPARE(&htim17, TIM_CHANNEL_1, pid_instance_mot2.output);
-			  HAL_GPIO_WritePin(MOTOR1_DIR_GPIO_Port, MOTOR1_DIR_Pin, GPIO_PIN_SET);
-		  }
-		
-      else{
-        __HAL_TIM_SET_COMPARE(&htim17, TIM_CHANNEL_1, (-1) * pid_instance_mot2.output);
-		    HAL_GPIO_WritePin(MOTOR1_DIR_GPIO_Port, MOTOR1_DIR_Pin, GPIO_PIN_RESET);
-		  }
-	  }
-
-    else __HAL_TIM_SET_COMPARE(&htim16, TIM_CHANNEL_1, 2000);
+    else{
+      __HAL_TIM_SET_COMPARE(&htim17, TIM_CHANNEL_1, (-1) * pd_instance_mot2.output);
+		  HAL_GPIO_WritePin(MOTOR1_DIR_GPIO_Port, MOTOR1_DIR_Pin, GPIO_PIN_RESET);
+		}
     
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_RESET); //End of test wrapper
-    
-    isrEnd = TIM7->CNT; //get end time
+
+    last_x_error = xError;
+    last_y_error = yError;
+
   }
 }
 
 
 
-void TIM3_Init(void){
+void Decoder_Init(void){
+  TIM2->CR1 |= 1;
   TIM3->CR1 |= 1;
 }
 

@@ -1,7 +1,6 @@
 #include "filter.h"
 
 
-
 void reset_average_filter(moving_avg_obj* instance)
 {
 	instance->counter = 0;
@@ -11,7 +10,6 @@ void reset_average_filter(moving_avg_obj* instance)
 		instance->buffer[i] = 0;
 	}
 }
-
 
 
 
@@ -31,6 +29,3 @@ void apply_average_filter(moving_avg_obj* instance, int16_t input, float* out)
     // normalization
 	*out = instance->out;
 }
-
-
-
