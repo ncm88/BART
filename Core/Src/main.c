@@ -18,8 +18,6 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "adc.h"
-#include "dma.h"
 #include "tim.h"
 #include "usart.h"
 #include "gpio.h"
@@ -126,21 +124,14 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_DMA_Init();
   MX_TIM2_Init();
   MX_TIM3_Init();
   MX_TIM16_Init();
   MX_TIM17_Init();
   MX_USART2_UART_Init();
   MX_TIM6_Init();
-  MX_ADC1_Init();
-  MX_TIM7_Init();
   /* USER CODE BEGIN 2 */
-  TIM7_Init();
   TIM3_Init();
-  HAL_TIM_Base_Start_IT(&htim6); //start ISR timer in interrupt mode
-  HAL_DMA_RegisterCallback(&hdma_usart2_tx, HAL_DMA_XFER_CPLT_CB_ID, &DMATransferComplete);
-  HAL_ADC_Start_DMA(&hadc1, (uint32_t*)adc_buf, ADC_BUF_LEN);
 
 
 
@@ -152,30 +143,6 @@ int main(void)
   while (1)
   {
 
-    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_1);
-    //HAL_Delay(100);
-
-    // Calculate the integer and fractional parts for the ADC value
-    int adc_value_int = (int)(latest_adc_value * SCALE_FACTOR);
-    int adc_value_frac = (int)((latest_adc_value * SCALE_FACTOR - adc_value_int) * 10000);  // Assuming two decimal points precision
-
-    // Calculate the integer and fractional parts for the filtered value
-    int filtered_value_int = (int)(filtered_adc_value * SCALE_FACTOR);
-    int filtered_value_frac = (int)((filtered_adc_value * SCALE_FACTOR - filtered_value_int) * 10000);  // Assuming two decimal points precision
-      
-    // Format the message without using floating point in sprintf
-    sprintf(msg, "ADC Value: %d.%04dV    Filtered Value: %d.%04dV    ISR Utilization (percent): %hu \r\n", adc_value_int, adc_value_frac, filtered_value_int, filtered_value_frac, ISR_Utilization);
-    
-    mlStart = TIM7->CNT;
-    if (uart_flag == ON) {
-      huart2.Instance->CR3 |= USART_CR3_DMAT;
-      HAL_DMA_Start_IT(&hdma_usart2_tx, (uint32_t)msg, (uint32_t)&huart2.Instance->TDR, strlen(msg));
-      uart_flag = OFF;
-    }
-
-    mlEnd = TIM7->CNT;
-
-    ISR_Utilization = 100 * ABS_DIFF(isrStart, isrEnd)/ABS_DIFF(mlStart, mlEnd);//ABS_DIFF(mlStart, mlEnd);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -192,7 +159,6 @@ void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
-  RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
 
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
@@ -200,9 +166,7 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
   RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
-  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
-  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL4;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     Error_Handler();
@@ -221,12 +185,6 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
-  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_ADC12;
-  PeriphClkInit.Adc12ClockSelection = RCC_ADC12PLLCLK_DIV1;
-  if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
-  {
-    Error_Handler();
-  }
 }
 
 /* USER CODE BEGIN 4 */
@@ -242,32 +200,20 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){   //predefined func
 
   if(htim->Instance == TIM6){
     
-    //TEST BLOCK-------------------------------------------------------------------------------
-    isrStart = TIM7->CNT;
-
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_SET); //Blink test wrapper
 
-    uart_flag = ON;
-    latest_adc_value = adc_buf[ADC_BUF_LEN - 1];
-    apply_average_filter_unsigned(&sampleFilter, latest_adc_value, &filtered_adc_value);
-
-    //END OF TEST BLOCK-----------------------------------------------------------------------
-
-
-    // measure velocity
+    //get position delta
 	  update_encoder(&enc_instance_mot1, &htim2);
     update_encoder(&enc_instance_mot2, &htim3);
 
-	  // applying filter
+	  //apply average velocity filter
 	  apply_average_filter(&filter_instance1, enc_instance_mot1.velocity, &motor1_vel);
     apply_average_filter(&filter_instance2, enc_instance_mot2.velocity, &motor2_vel);
 
-    //EMA FILTER COMPARISON TEST
-    apply_ema_filter(&m2_ema, enc_instance_mot2.velocity, &m2_vel_ema);
 
 	  if(pid_instance_mot1.d_gain != 0 || pid_instance_mot1.p_gain != 0 || pid_instance_mot1.i_gain != 0){
 		  // PID apply
-		  apply_pid(&pid_instance_mot1, MOTOR_VEL_REFERENCE - motor1_vel, UPDATE_RATE);
+		  apply_pid(&pid_instance_mot1, MOTOR_VEL_REFERENCE - motor1_vel, SAMPLE_RATE);
 
 		  // PWM
 		  if(pid_instance_mot1.output > 0){
@@ -283,7 +229,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){   //predefined func
 
     if(pid_instance_mot2.d_gain != 0 || pid_instance_mot2.p_gain != 0 || pid_instance_mot2.i_gain != 0){
 		  // PID apply
-		  apply_pid(&pid_instance_mot2, MOTOR_VEL_REFERENCE - motor2_vel, UPDATE_RATE);
+		  apply_pid(&pid_instance_mot2, MOTOR_VEL_REFERENCE - motor2_vel, SAMPLE_RATE);
 
 		  // PWM
 		  if(pid_instance_mot2.output > 0){
@@ -309,30 +255,6 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){   //predefined func
 
 void TIM3_Init(void){
   TIM3->CR1 |= 1;
-}
-
-
-
-
-//Had to write this because HAL functionality for TIM7 wasn't working
-void TIM7_Init(void) {
-    // Step 1: Enable clock for TIM7
-    RCC->APB1ENR |= RCC_APB1ENR_TIM7EN;
-
-    // Step 2: Configure the timer
-    TIM7->PSC = 0x023F; // Set prescaler 
-    TIM7->ARR = 0xFFFF; // Set the auto-reload value
-
-    // Here you can configure other TIM7 parameters as needed (e.g., mode)
-    TIM7->CR1 |= (1 << 7); //enable autoreload bit
-
-    // Step 3: Enable the timer
-    TIM7->CR1 |= TIM_CR1_CEN;
-
-
-    // Optionally, enable interrupt and set priority
-    // NVIC_EnableIRQ(TIM7_IRQn);
-    // NVIC_SetPriority(TIM7_IRQn, priority); // Set the desired priority
 }
 
 

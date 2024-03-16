@@ -53,9 +53,7 @@ extern "C" {
 void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
-void DMATransferComplete(DMA_HandleTypeDef* hdma);
 void TIM3_Init(void);
-void TIM7_Init(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
@@ -71,7 +69,7 @@ void TIM7_Init(void);
 #define VCP_RX_GPIO_Port GPIOA
 
 /* USER CODE BEGIN Private defines */
-#define UPDATE_RATE 1000
+#define SAMPLE_RATE 1000
 #define MOTOR1_DIR_Pin GPIO_PIN_10
 #define MOTOR1_DIR_GPIO_Port GPIOA
 #define MOTOR2_DIR_Pin GPIO_PIN_11
