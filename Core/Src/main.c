@@ -107,7 +107,9 @@ int main(void)
   MX_USART2_UART_Init();
   MX_TIM6_Init();
   /* USER CODE BEGIN 2 */
+  
   Decoder_Init();
+  PWM_Init();
   set_pd_gain(&pd_instance_mot1, KP, KD);
   set_pd_gain(&pd_instance_mot1, KP, KD);
 
@@ -200,8 +202,8 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){   //predefined func
     apply_average_filter(&filter_instance2, deltaY, &motor2_error_derivative);
 
 		// pd apply
-		apply_pd(&pd_instance_mot1, deltaX, motor1_error_derivative, SAMPLE_RATE);
-    apply_pd(&pd_instance_mot2, deltaY, motor2_error_derivative, SAMPLE_RATE);
+		apply_pd(&pd_instance_mot1, xError, motor1_error_derivative, SAMPLE_RATE);
+    apply_pd(&pd_instance_mot2, yError, motor2_error_derivative, SAMPLE_RATE);
 
 
 		// PWM
@@ -213,6 +215,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){   //predefined func
       __HAL_TIM_SET_COMPARE(&htim16, TIM_CHANNEL_1, (-1) * pd_instance_mot1.output);
 		  HAL_GPIO_WritePin(MOTOR1_DIR_GPIO_Port, MOTOR1_DIR_Pin, GPIO_PIN_RESET);
 		}
+
 		if(pd_instance_mot2.output > 0){
 			__HAL_TIM_SET_COMPARE(&htim17, TIM_CHANNEL_1, pd_instance_mot2.output);    //GONNA NEED TO FIX THIS MOST LIKELY
 			HAL_GPIO_WritePin(MOTOR1_DIR_GPIO_Port, MOTOR1_DIR_Pin, GPIO_PIN_SET);
@@ -221,11 +224,11 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){   //predefined func
       __HAL_TIM_SET_COMPARE(&htim17, TIM_CHANNEL_1, (-1) * pd_instance_mot2.output);
 		  HAL_GPIO_WritePin(MOTOR1_DIR_GPIO_Port, MOTOR1_DIR_Pin, GPIO_PIN_RESET);
 		}
-    
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_RESET); //End of test wrapper
 
     last_x_error = xError;
     last_y_error = yError;
+
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_RESET); //End of test wrapper
 
   }
 }
@@ -237,6 +240,12 @@ void Decoder_Init(void){
   TIM3->CR1 |= 1;
 }
 
+
+
+void PWM_Init(void){
+  TIM16->CR1 |= 1;
+  TIM17->CR1 |= 1;
+}
 
 
 /* USER CODE END 4 */

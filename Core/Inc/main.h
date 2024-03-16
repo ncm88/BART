@@ -54,6 +54,7 @@ void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
 void Decoder_Init(void);
+void PWM_Init(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
