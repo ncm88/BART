@@ -24,7 +24,6 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "encoder.h"
 #include "pd.h"
 #include "filter.h"
 /* USER CODE END Includes */
@@ -179,10 +178,6 @@ void SystemClock_Config(void)
 
 /* USER CODE BEGIN 4 */
 
-void DMATransferComplete(DMA_HandleTypeDef* hdma){
-  huart2.Instance->CR3 &= ~USART_CR3_DMAT; 
-}
-
 
 //motor 1: encoder-htim2, output-htim16
 //motor 2: encoder-htim3, output-htim17
@@ -222,7 +217,6 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){   //predefined func
 			__HAL_TIM_SET_COMPARE(&htim17, TIM_CHANNEL_1, pd_instance_mot2.output);    //GONNA NEED TO FIX THIS MOST LIKELY
 			HAL_GPIO_WritePin(MOTOR1_DIR_GPIO_Port, MOTOR1_DIR_Pin, GPIO_PIN_SET);
 		}
-		
     else{
       __HAL_TIM_SET_COMPARE(&htim17, TIM_CHANNEL_1, (-1) * pd_instance_mot2.output);
 		  HAL_GPIO_WritePin(MOTOR1_DIR_GPIO_Port, MOTOR1_DIR_Pin, GPIO_PIN_RESET);

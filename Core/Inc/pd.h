@@ -1,10 +1,9 @@
 #ifndef PID_H
 #define PID_H
 
-#include "encoder.h"
+#include<stdint.h>
 
 #define PD_MAX  8000
-
 
 typedef struct
 {
