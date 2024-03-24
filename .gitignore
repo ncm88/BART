@@ -8,3 +8,4 @@ build/
 *VSCODE*
 STM32Make.make
 *.elf
+client_output
