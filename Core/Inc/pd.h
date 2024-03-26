@@ -3,8 +3,6 @@
 
 #include<stdint.h>
 
-#define PD_MAX  7998
-
 typedef struct
 {
 	float p_gain;

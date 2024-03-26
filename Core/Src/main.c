@@ -35,10 +35,13 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define ON 1
-#define OFF 0
 #define KP 0.584
 #define KD 0.00136
+#define SAMPLE_RATE 1000
+#define MOTOR1_DIR_Pin GPIO_PIN_10
+#define MOTOR1_DIR_GPIO_Port GPIOA
+#define MOTOR2_DIR_Pin GPIO_PIN_11
+#define MOTOR2_DIR_GPIO_Port GPIOA
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -55,10 +58,8 @@ moving_avg_obj filter_instance1, filter_instance2;
 
 float motor1_error_derivative, motor2_error_derivative;
 
-uint16_t xTarg, yTarg; //angular representation of target x and y cartesian coordinates
-static int16_t last_x_error = 0;
-static int16_t last_y_error = 0;
-
+int16_t xTarg, yTarg; //angular representation of target x and y cartesian coordinates
+int16_t last_x_error = 0, last_y_error = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -107,19 +108,15 @@ int main(void)
   MX_USART2_UART_Init();
   MX_TIM6_Init();
   /* USER CODE BEGIN 2 */
-  
   Decoder_Init();
   PWM_Init();
   set_pd_gain(&pd_instance_mot1, KP, KD);
   set_pd_gain(&pd_instance_mot1, KP, KD);
-
-
+  TIM6_manual_init();
   //INSERT CALIBRATION CODE HERE----------------------------------------
 
 
-
-
-
+  xTarg = 0;
   //----------------------------------------------------------------------
 
 
@@ -130,10 +127,9 @@ int main(void)
   while (1)
   {
     
-    
-    
-    
-    
+    xTarg %= 360;
+    xTarg += 20;
+    HAL_Delay(2000);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -184,7 +180,6 @@ void SystemClock_Config(void)
 //motor 1: encoder-htim2, output-htim16
 //motor 2: encoder-htim3, output-htim17
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){   //predefined function override
-
   if(htim->Instance == TIM6){
     
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_SET); //Blink test wrapper
@@ -241,11 +236,17 @@ void Decoder_Init(void){
 }
 
 
-
 void PWM_Init(void){
   TIM16->CR1 |= 1;
   TIM17->CR1 |= 1;
 }
+
+
+void TIM6_manual_init(){
+  TIM6->CR1 |= 1;
+  TIM6->DIER |= TIM_DIER_UIE;
+}
+
 
 
 /* USER CODE END 4 */
