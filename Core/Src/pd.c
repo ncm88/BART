@@ -16,7 +16,7 @@ void reset_pd(pd_instance_int16 *pd)
 }
 
 
-void apply_pd(pd_instance_int16 *pd, int16_t input_error, float delta_filtered, uint16_t sampling_rate)
+void apply_pd(pd_instance_int16 *pd, int32_t input_error, float delta_filtered, uint16_t sampling_rate)
 {
 	pd->output = ((pd->p_gain * input_error + pd->d_gain * delta_filtered * sampling_rate) / ENCODER_RESOLUTION) * PD_MAX;
 	if(pd->output >= PD_MAX) pd->output = PD_MAX;

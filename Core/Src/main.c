@@ -57,14 +57,14 @@
 static pd_instance_int16 pd_instance_mot1, pd_instance_mot2;
 moving_avg_obj filter_instance1, filter_instance2;
 
-int16_t xPos;
-int16_t xCurrErr;
-int16_t xOutput;
+int32_t xPos;
+int32_t xCurrErr;
+int32_t xOutput;
 
 float motor1_error_derivative, motor2_error_derivative;
 
-int16_t xTarg, yTarg; //angular representation of target x and y cartesian coordinates
-int16_t last_x_error = 0, last_y_error = 0;
+int32_t xTarg, yTarg; //angular representation of target x and y cartesian coordinates
+int32_t last_x_error = 0, last_y_error = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -189,16 +189,16 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){   //predefined func
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_SET); //Blink test wrapper
 
     //get position error
-    int16_t xError = xTarg - __HAL_TIM_GET_COUNTER(&htim2); //SWICTHED TO HRIM3 TEMPORARILY FOR ENCODER 1 PIN CHECK
-    int16_t yError = yTarg - __HAL_TIM_GET_COUNTER(&htim3);
+    int32_t xError = xTarg - __HAL_TIM_GET_COUNTER(&htim2); 
+    int32_t yError = yTarg - __HAL_TIM_GET_COUNTER(&htim3);
 
     xCurrErr = xError;
     xPos = (-1) * (xError - xTarg);
     
 
     //get error delta
-    int16_t deltaX = xError - last_x_error;
-    int16_t deltaY = yError - last_y_error;
+    int32_t deltaX = xError - last_x_error;
+    int32_t deltaY = yError - last_y_error;
 
     //filter on error delta
     apply_average_filter(&filter_instance1, deltaX, &motor1_error_derivative);
@@ -247,11 +247,11 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){   //predefined func
 void Decoder_Init(void){
   TIM2->CR1 |= TIM_CR1_CEN;
   TIM2->CR1 |= TIM_CR1_ARPE;
-  TIM2->ARR = 65535;
+  TIM2->ARR = 48959;
 
   TIM3->CR1 |= TIM_CR1_CEN;
   TIM3->CR1 |= TIM_CR1_ARPE;
-  TIM3->ARR = 65535;
+  TIM3->ARR = 48959;
 }
 
 

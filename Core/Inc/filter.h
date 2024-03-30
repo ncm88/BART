@@ -8,7 +8,7 @@
 
 
 typedef struct{
-	int16_t buffer[MOVING_AVERAGE_LENGTH];
+	int32_t buffer[MOVING_AVERAGE_LENGTH];
 	uint16_t counter;
 	int32_t sum;
 	float out;
