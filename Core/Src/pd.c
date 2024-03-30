@@ -1,7 +1,7 @@
 #include "pd.h"
 
 #define PD_MAX  7998
-#define ENCODER_RESOLUTION 360
+#define ENCODER_RESOLUTION 12240
 
 void set_pd_gain(pd_instance_int16* pd, float p, float d)
 {

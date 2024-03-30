@@ -36,7 +36,7 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 #define KP 0.584
-#define KD 0.00136
+#define KD 0
 #define SAMPLE_RATE 1000
 #define MOTOR1_DIR_Pin GPIO_PIN_10
 #define MOTOR1_DIR_GPIO_Port GPIOA
@@ -48,6 +48,7 @@
 /* USER CODE BEGIN PM */
 
 
+
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
@@ -55,6 +56,10 @@
 /* USER CODE BEGIN PV */
 static pd_instance_int16 pd_instance_mot1, pd_instance_mot2;
 moving_avg_obj filter_instance1, filter_instance2;
+
+int16_t xPos;
+int16_t xCurrErr;
+int16_t xOutput;
 
 float motor1_error_derivative, motor2_error_derivative;
 
@@ -126,9 +131,8 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    
-    xTarg %= 360;
-    xTarg += 20;
+    xTarg %= 12240;
+    xTarg += 1000;
     HAL_Delay(2000);
     /* USER CODE END WHILE */
 
@@ -185,8 +189,12 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){   //predefined func
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_SET); //Blink test wrapper
 
     //get position error
-    int16_t xError = xTarg - __HAL_TIM_GET_COUNTER(&htim2);
+    int16_t xError = xTarg - __HAL_TIM_GET_COUNTER(&htim2); //SWICTHED TO HRIM3 TEMPORARILY FOR ENCODER 1 PIN CHECK
     int16_t yError = yTarg - __HAL_TIM_GET_COUNTER(&htim3);
+
+    xCurrErr = xError;
+    xPos = (-1) * (xError - xTarg);
+    
 
     //get error delta
     int16_t deltaX = xError - last_x_error;
@@ -200,8 +208,10 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){   //predefined func
 		apply_pd(&pd_instance_mot1, xError, motor1_error_derivative, SAMPLE_RATE);
     apply_pd(&pd_instance_mot2, yError, motor2_error_derivative, SAMPLE_RATE);
 
+    
+    xOutput = pd_instance_mot2.output;
 
-		// PWM
+    // PWM
 		if(pd_instance_mot1.output > 0){
 			__HAL_TIM_SET_COMPARE(&htim16, TIM_CHANNEL_1, pd_instance_mot1.output);
 			HAL_GPIO_WritePin(MOTOR1_DIR_GPIO_Port, MOTOR1_DIR_Pin, GPIO_PIN_SET);
@@ -213,12 +223,16 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){   //predefined func
 
 		if(pd_instance_mot2.output > 0){
 			__HAL_TIM_SET_COMPARE(&htim17, TIM_CHANNEL_1, pd_instance_mot2.output);    //GONNA NEED TO FIX THIS MOST LIKELY
-			HAL_GPIO_WritePin(MOTOR1_DIR_GPIO_Port, MOTOR1_DIR_Pin, GPIO_PIN_SET);
+			HAL_GPIO_WritePin(MOTOR2_DIR_GPIO_Port, MOTOR2_DIR_Pin, GPIO_PIN_SET);
 		}
     else{
       __HAL_TIM_SET_COMPARE(&htim17, TIM_CHANNEL_1, (-1) * pd_instance_mot2.output);
-		  HAL_GPIO_WritePin(MOTOR1_DIR_GPIO_Port, MOTOR1_DIR_Pin, GPIO_PIN_RESET);
+		  HAL_GPIO_WritePin(MOTOR2_DIR_GPIO_Port, MOTOR2_DIR_Pin, GPIO_PIN_RESET);
 		}
+    
+		
+    //TIM16->CCR1 = 5000;
+   // __HAL_TIM_SET_COMPARE(&htim16, TIM_CHANNEL_1, 5000);
 
     last_x_error = xError;
     last_y_error = yError;
@@ -231,14 +245,24 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){   //predefined func
 
 
 void Decoder_Init(void){
-  TIM2->CR1 |= 1;
-  TIM3->CR1 |= 1;
+  TIM2->CR1 |= TIM_CR1_CEN;
+  TIM2->CR1 |= TIM_CR1_ARPE;
+  TIM2->ARR = 65535;
+
+  TIM3->CR1 |= TIM_CR1_CEN;
+  TIM3->CR1 |= TIM_CR1_ARPE;
+  TIM3->ARR = 65535;
 }
 
 
 void PWM_Init(void){
   TIM16->CR1 |= 1;
+  TIM16->CCER |= TIM_CCER_CC1E;
+  HAL_TIM_PWM_Start(&htim16, TIM_CHANNEL_1); //PWM pin map fucntion
+
   TIM17->CR1 |= 1;
+  TIM17->CCER |= TIM_CCER_CC1E;
+  HAL_TIM_PWM_Start(&htim17, TIM_CHANNEL_1); 
 }
 
 
