@@ -42,14 +42,19 @@
 #define MOTOR1_DIR_GPIO_Port GPIOA
 #define MOTOR2_DIR_Pin GPIO_PIN_11
 #define MOTOR2_DIR_GPIO_Port GPIOA
+#define ENCODER_RESOLUTION 48960
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
 
-
-
 /* USER CODE END PM */
+
+#define ABS_ANGLE(A, RES) ((A >= 0)? A : RES + A)
+#define ARC_VECTOR(TARGET, CURRENT) \
+    (((TARGET - CURRENT) >= 0) ? \
+        (((TARGET - CURRENT) <= (ENCODER_RESOLUTION + CURRENT - TARGET)) ? (TARGET - CURRENT) : (-1) * (ENCODER_RESOLUTION + CURRENT - TARGET)) : \
+        (((CURRENT - TARGET) <= (ENCODER_RESOLUTION - CURRENT + TARGET)) ? (TARGET - CURRENT) : (ENCODER_RESOLUTION + TARGET - CURRENT)))
 
 /* Private variables ---------------------------------------------------------*/
 
@@ -64,6 +69,7 @@ int32_t xOutput;
 float motor1_error_derivative, motor2_error_derivative;
 
 int32_t xTarg, yTarg; //angular representation of target x and y cartesian coordinates
+int32_t xTargTracker;
 int32_t last_x_error = 0, last_y_error = 0;
 /* USER CODE END PV */
 
@@ -116,12 +122,12 @@ int main(void)
   Decoder_Init();
   PWM_Init();
   set_pd_gain(&pd_instance_mot1, KP, KD);
-  set_pd_gain(&pd_instance_mot1, KP, KD);
+  set_pd_gain(&pd_instance_mot2, KP, KD);
   TIM6_manual_init();
   //INSERT CALIBRATION CODE HERE----------------------------------------
 
 
-  xTarg = 0;
+  xTarg = 5000;
   //----------------------------------------------------------------------
 
 
@@ -131,9 +137,8 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    xTarg %= 12240;
-    xTarg += 1000;
     HAL_Delay(2000);
+    xTarg *= -1;
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -189,11 +194,13 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){   //predefined func
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_SET); //Blink test wrapper
 
     //get position error
-    int32_t xError = xTarg - __HAL_TIM_GET_COUNTER(&htim2); 
+    xPos = __HAL_TIM_GET_COUNTER(&htim2); //remove this tracker when needed
+    xTargTracker = ABS_ANGLE(xTarg, ENCODER_RESOLUTION);
+    int32_t xError = ARC_VECTOR(ABS_ANGLE(xTarg, ENCODER_RESOLUTION), __HAL_TIM_GET_COUNTER(&htim2)); 
     int32_t yError = yTarg - __HAL_TIM_GET_COUNTER(&htim3);
 
     xCurrErr = xError;
-    xPos = (-1) * (xError - xTarg);
+    
     
 
     //get error delta
@@ -209,7 +216,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){   //predefined func
     apply_pd(&pd_instance_mot2, yError, motor2_error_derivative, SAMPLE_RATE);
 
     
-    xOutput = pd_instance_mot2.output;
+    xOutput = pd_instance_mot1.output;
 
     // PWM
 		if(pd_instance_mot1.output > 0){
@@ -247,11 +254,11 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){   //predefined func
 void Decoder_Init(void){
   TIM2->CR1 |= TIM_CR1_CEN;
   TIM2->CR1 |= TIM_CR1_ARPE;
-  TIM2->ARR = 48959;
+  TIM2->ARR = ENCODER_RESOLUTION - 1;
 
   TIM3->CR1 |= TIM_CR1_CEN;
   TIM3->CR1 |= TIM_CR1_ARPE;
-  TIM3->ARR = 48959;
+  TIM3->ARR = ENCODER_RESOLUTION - 1;
 }
 
 
