@@ -35,8 +35,8 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define KP 0.166
-#define KD 0.090
+#define KP 0.19
+#define KD 0.14
 #define SAMPLE_RATE 100
 #define MOTOR1_DIR_Pin GPIO_PIN_10
 #define MOTOR1_DIR_GPIO_Port GPIOA
@@ -131,7 +131,7 @@ int main(void)
   //INSERT CALIBRATION CODE HERE----------------------------------------
 
 
-  xTarg = 7500;
+  xTarg = 1360;
   //----------------------------------------------------------------------
 
 
@@ -141,7 +141,7 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    HAL_Delay(225);
+    HAL_Delay(150);
     xTarg *= -1;
     /* USER CODE END WHILE */
 
