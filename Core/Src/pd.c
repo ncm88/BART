@@ -2,7 +2,7 @@
 
 #define PD_MAX  7998
 #define RESOLUTION 48960
-#define SCALE_FACTOR 5
+#define SCALE_FACTOR 35
 
 #define ABS(A) (A >= 0)? (A) : ((-1) * (A))
 

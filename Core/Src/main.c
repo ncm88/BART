@@ -35,9 +35,9 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define KP 0.584
-#define KD 0
-#define SAMPLE_RATE 1000
+#define KP 0.166
+#define KD 0.090
+#define SAMPLE_RATE 100
 #define MOTOR1_DIR_Pin GPIO_PIN_10
 #define MOTOR1_DIR_GPIO_Port GPIOA
 #define MOTOR2_DIR_Pin GPIO_PIN_11
@@ -51,10 +51,14 @@
 /* USER CODE END PM */
 
 #define ABS_ANGLE(A, RES) ((A >= 0)? A : RES + A)
+#define SIGNED_ANGLE(A, RES) ((A > (RES / 2)) ? (A - RES) : (A))
 #define ARC_VECTOR(TARGET, CURRENT) \
-    (((TARGET - CURRENT) >= 0) ? \
-        (((TARGET - CURRENT) <= (ENCODER_RESOLUTION + CURRENT - TARGET)) ? (TARGET - CURRENT) : (-1) * (ENCODER_RESOLUTION + CURRENT - TARGET)) : \
-        (((CURRENT - TARGET) <= (ENCODER_RESOLUTION - CURRENT + TARGET)) ? (TARGET - CURRENT) : (ENCODER_RESOLUTION + TARGET - CURRENT)))
+    ((((TARGET - CURRENT) + ENCODER_RESOLUTION) % ENCODER_RESOLUTION <= ENCODER_RESOLUTION / 2) ? \
+        ((TARGET - CURRENT) + ENCODER_RESOLUTION) % ENCODER_RESOLUTION : \
+        -((ENCODER_RESOLUTION - ((TARGET - CURRENT) + ENCODER_RESOLUTION) % ENCODER_RESOLUTION) % ENCODER_RESOLUTION))
+
+
+
 
 /* Private variables ---------------------------------------------------------*/
 
@@ -127,7 +131,7 @@ int main(void)
   //INSERT CALIBRATION CODE HERE----------------------------------------
 
 
-  xTarg = 5000;
+  xTarg = 7500;
   //----------------------------------------------------------------------
 
 
@@ -137,7 +141,7 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    HAL_Delay(2000);
+    HAL_Delay(225);
     xTarg *= -1;
     /* USER CODE END WHILE */
 
@@ -194,8 +198,9 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){   //predefined func
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_SET); //Blink test wrapper
 
     //get position error
-    xPos = __HAL_TIM_GET_COUNTER(&htim2); //remove this tracker when needed
-    xTargTracker = ABS_ANGLE(xTarg, ENCODER_RESOLUTION);
+    xPos = SIGNED_ANGLE(__HAL_TIM_GET_COUNTER(&htim2), ENCODER_RESOLUTION); //remove this tracker when needed
+    xTargTracker = xTarg;
+    
     int32_t xError = ARC_VECTOR(ABS_ANGLE(xTarg, ENCODER_RESOLUTION), __HAL_TIM_GET_COUNTER(&htim2)); 
     int32_t yError = yTarg - __HAL_TIM_GET_COUNTER(&htim3);
 
