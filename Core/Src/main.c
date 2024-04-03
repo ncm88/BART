@@ -21,12 +21,11 @@
 #include "tim.h"
 #include "usart.h"
 #include "gpio.h"
-
-#include <time.h> //TEST
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "pd.h"
 #include "filter.h"
+#include <time.h> //TEST
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -51,17 +50,13 @@
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
-
-/* USER CODE END PM */
-
 #define ABS_ANGLE(A, RES) ((A >= 0)? A : RES + A)
 #define SIGNED_ANGLE(A, RES) ((A > (RES / 2)) ? (A - RES) : (A))
 #define ARC_VECTOR(TARGET, CURRENT) \
     ((((TARGET - CURRENT) + ENCODER_RESOLUTION) % ENCODER_RESOLUTION <= ENCODER_RESOLUTION / 2) ? \
         ((TARGET - CURRENT) + ENCODER_RESOLUTION) % ENCODER_RESOLUTION : \
         -((ENCODER_RESOLUTION - ((TARGET - CURRENT) + ENCODER_RESOLUTION) % ENCODER_RESOLUTION) % ENCODER_RESOLUTION))
-
-
+/* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
 
