@@ -4,7 +4,7 @@
 #include "stdint.h"
 
 
-#define MOVING_AVERAGE_LENGTH  44
+#define MOVING_AVERAGE_LENGTH  40
 
 
 typedef struct{

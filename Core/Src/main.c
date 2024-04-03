@@ -22,6 +22,7 @@
 #include "usart.h"
 #include "gpio.h"
 
+#include <time.h> //TEST
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "pd.h"
@@ -35,14 +36,17 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define KP 0.19
-#define KD 0.14
+#define KP 0.24
+#define KD 0.161
 #define SAMPLE_RATE 100
 #define MOTOR1_DIR_Pin GPIO_PIN_10
 #define MOTOR1_DIR_GPIO_Port GPIOA
 #define MOTOR2_DIR_Pin GPIO_PIN_11
 #define MOTOR2_DIR_GPIO_Port GPIOA
 #define ENCODER_RESOLUTION 48960
+
+#define ON 1
+#define OFF 0
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -59,7 +63,6 @@
 
 
 
-
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
@@ -70,10 +73,14 @@ int32_t xPos;
 int32_t xCurrErr;
 int32_t xOutput;
 
+int32_t yPos;
+int32_t yCurrErr;
+int32_t yOutput;
+
 float motor1_error_derivative, motor2_error_derivative;
 
 int32_t xTarg, yTarg; //angular representation of target x and y cartesian coordinates
-int32_t xTargTracker;
+uint8_t laser;
 int32_t last_x_error = 0, last_y_error = 0;
 /* USER CODE END PV */
 
@@ -129,9 +136,11 @@ int main(void)
   set_pd_gain(&pd_instance_mot2, KP, KD);
   TIM6_manual_init();
   //INSERT CALIBRATION CODE HERE----------------------------------------
+  srand(time(NULL));//test
 
-
-  xTarg = 1360;
+  xTarg = 1100;
+  yTarg = 420;
+  laser = OFF;
   //----------------------------------------------------------------------
 
 
@@ -141,8 +150,18 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    HAL_Delay(150);
-    xTarg *= -1;
+    HAL_Delay(75);
+
+    // Initialize random number generator
+    
+
+    // Generate a random number between 0 and 2720 (inclusive)
+    xTarg = rand() % 2721 - 1360;
+    yTarg = rand() % 2721 - 1360;
+    
+    if(xTarg * yTarg > 0) laser ^= 1;
+
+
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -195,19 +214,24 @@ void SystemClock_Config(void)
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){   //predefined function override
   if(htim->Instance == TIM6){
     
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_SET); //Blink test wrapper
+    if(laser == ON){
+       HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_SET); 
+    }
+    
+    else{
+      HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_RESET); 
+    }
 
     //get position error
-    xPos = SIGNED_ANGLE(__HAL_TIM_GET_COUNTER(&htim2), ENCODER_RESOLUTION); //remove this tracker when needed
-    xTargTracker = xTarg;
-    
-    int32_t xError = ARC_VECTOR(ABS_ANGLE(xTarg, ENCODER_RESOLUTION), __HAL_TIM_GET_COUNTER(&htim2)); 
-    int32_t yError = yTarg - __HAL_TIM_GET_COUNTER(&htim3);
+    xPos = SIGNED_ANGLE(__HAL_TIM_GET_COUNTER(&htim2), ENCODER_RESOLUTION); //action channel
+    yPos = SIGNED_ANGLE(__HAL_TIM_GET_COUNTER(&htim3), ENCODER_RESOLUTION);
+
+    int32_t xError = ARC_VECTOR(ABS_ANGLE(xTarg, ENCODER_RESOLUTION), __HAL_TIM_GET_COUNTER(&htim2)); //action channel
+    int32_t yError = ARC_VECTOR(ABS_ANGLE(yTarg, ENCODER_RESOLUTION), __HAL_TIM_GET_COUNTER(&htim3));
 
     xCurrErr = xError;
+    yCurrErr = yError;
     
-    
-
     //get error delta
     int32_t deltaX = xError - last_x_error;
     int32_t deltaY = yError - last_y_error;
@@ -220,8 +244,8 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){   //predefined func
 		apply_pd(&pd_instance_mot1, xError, motor1_error_derivative, SAMPLE_RATE);
     apply_pd(&pd_instance_mot2, yError, motor2_error_derivative, SAMPLE_RATE);
 
-    
     xOutput = pd_instance_mot1.output;
+    yOutput = pd_instance_mot2.output;
 
     // PWM
 		if(pd_instance_mot1.output > 0){
@@ -242,14 +266,9 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){   //predefined func
 		  HAL_GPIO_WritePin(MOTOR2_DIR_GPIO_Port, MOTOR2_DIR_Pin, GPIO_PIN_RESET);
 		}
     
-		
-    //TIM16->CCR1 = 5000;
-   // __HAL_TIM_SET_COMPARE(&htim16, TIM_CHANNEL_1, 5000);
 
     last_x_error = xError;
     last_y_error = yError;
-
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_RESET); //End of test wrapper
 
   }
 }
