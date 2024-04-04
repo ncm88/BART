@@ -51,7 +51,7 @@
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
 #define ABS_ANGLE(A, RES) ((A >= 0)? A : RES + A)
-#define SIGNED_ANGLE(A, RES) ((A > (RES / 2)) ? (A - RES) : (A))
+#define SIGNED_ANGLE(A, RES) ((A > (RES / 2)) ? (A - RES) : (A)) //FOR VISUALIZATION PURPOSES
 #define ARC_VECTOR(TARGET, CURRENT) \
     ((((TARGET - CURRENT) + ENCODER_RESOLUTION) % ENCODER_RESOLUTION <= ENCODER_RESOLUTION / 2) ? \
         ((TARGET - CURRENT) + ENCODER_RESOLUTION) % ENCODER_RESOLUTION : \
@@ -284,7 +284,7 @@ void Decoder_Init(void){
 void PWM_Init(void){
   TIM16->CR1 |= 1;
   TIM16->CCER |= TIM_CCER_CC1E;
-  HAL_TIM_PWM_Start(&htim16, TIM_CHANNEL_1); //PWM pin map fucntion
+  HAL_TIM_PWM_Start(&htim16, TIM_CHANNEL_1); //PWM pin map function
 
   TIM17->CR1 |= 1;
   TIM17->CCER |= TIM_CCER_CC1E;
