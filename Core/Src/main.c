@@ -6,26 +6,25 @@
   ******************************************************************************
   * @attention
   *
-  * Copyright (c) 2024 STMicroelectronics.
-  * All rights reserved.
+  * Copyright (c) 2024 Nolan McCleary.
   *
   * This software is licensed under terms that can be found in the LICENSE file
   * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
   *
   ******************************************************************************
   */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "dma.h"
 #include "tim.h"
 #include "usart.h"
 #include "gpio.h"
+
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "pd.h"
 #include "filter.h"
-#include <time.h> //TEST
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -43,6 +42,8 @@
 #define MOTOR2_DIR_Pin GPIO_PIN_11
 #define MOTOR2_DIR_GPIO_Port GPIOA
 #define ENCODER_RESOLUTION 48960
+#define CHUNK_SIZE 120
+#define UART_BUFFSIZE CHUNK_SIZE * 3
 
 #define ON 1
 #define OFF 0
@@ -74,9 +75,16 @@ int32_t yOutput;
 
 float motor1_error_derivative, motor2_error_derivative;
 
-int32_t xTarg, yTarg; //angular representation of target x and y cartesian coordinates
+uint16_t xTarg, yTarg; //angular representation of target x and y cartesian coordinates
 uint8_t laser;
-int32_t last_x_error = 0, last_y_error = 0;
+int32_t deltaX, deltaY;
+int32_t xError, yError;
+int32_t last_x_error, last_y_error;
+
+uint8_t rx_buff[CHUNK_SIZE * 2] = {0};
+uint16_t buffer_index = 0;
+uint8_t flag;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -118,26 +126,28 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_TIM2_Init();
   MX_TIM3_Init();
   MX_TIM16_Init();
   MX_TIM17_Init();
   MX_USART2_UART_Init();
   MX_TIM6_Init();
+  MX_TIM7_Init();
   /* USER CODE BEGIN 2 */
   Decoder_Init();
   PWM_Init();
   set_pd_gain(&pd_instance_mot1, KP, KD);
   set_pd_gain(&pd_instance_mot2, KP, KD);
   TIM6_manual_init();
+  TIM7_manual_init();
   //INSERT CALIBRATION CODE HERE----------------------------------------
-  srand(time(NULL));//test
 
-  xTarg = 1100;
-  yTarg = 420;
+  xTarg = 0;
+  yTarg = 0;
   laser = OFF;
   //----------------------------------------------------------------------
-
+  HAL_UART_Receive_DMA(&huart2, rx_buff, CHUNK_SIZE);
 
   /* USER CODE END 2 */
 
@@ -145,17 +155,6 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    HAL_Delay(75);
-
-    // Initialize random number generator
-    
-
-    // Generate a random number between 0 and 2720 (inclusive)
-    xTarg = rand() % 2721 - 1360;
-    yTarg = rand() % 2721 - 1360;
-    
-    if(xTarg * yTarg > 0) laser ^= 1;
-
 
     /* USER CODE END WHILE */
 
@@ -164,6 +163,7 @@ int main(void)
   }
   /* USER CODE END 3 */
 }
+
 
 /**
   * @brief System Clock Configuration
@@ -221,15 +221,15 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){   //predefined func
     xPos = SIGNED_ANGLE(__HAL_TIM_GET_COUNTER(&htim2), ENCODER_RESOLUTION); //action channel
     yPos = SIGNED_ANGLE(__HAL_TIM_GET_COUNTER(&htim3), ENCODER_RESOLUTION);
 
-    int32_t xError = ARC_VECTOR(ABS_ANGLE(xTarg, ENCODER_RESOLUTION), __HAL_TIM_GET_COUNTER(&htim2)); //action channel
-    int32_t yError = ARC_VECTOR(ABS_ANGLE(yTarg, ENCODER_RESOLUTION), __HAL_TIM_GET_COUNTER(&htim3));
+    xError = ARC_VECTOR(ABS_ANGLE(xTarg, ENCODER_RESOLUTION), __HAL_TIM_GET_COUNTER(&htim2)); //action channel
+    yError = ARC_VECTOR(ABS_ANGLE(yTarg, ENCODER_RESOLUTION), __HAL_TIM_GET_COUNTER(&htim3));
 
     xCurrErr = xError;
     yCurrErr = yError;
     
     //get error delta
-    int32_t deltaX = xError - last_x_error;
-    int32_t deltaY = yError - last_y_error;
+    deltaX = xError - last_x_error;
+    deltaY = yError - last_y_error;
 
     //filter on error delta
     apply_average_filter(&filter_instance1, deltaX, &motor1_error_derivative);
@@ -261,10 +261,27 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){   //predefined func
 		  HAL_GPIO_WritePin(MOTOR2_DIR_GPIO_Port, MOTOR2_DIR_Pin, GPIO_PIN_RESET);
 		}
     
-
     last_x_error = xError;
     last_y_error = yError;
+  }
 
+  else if(htim->Instance == TIM7){
+    flag = (buffer_index < UART_BUFFSIZE - 8);
+    
+    if(flag){
+      xTarg = rx_buff[buffer_index] | (rx_buff[buffer_index + 1] << 8);
+      yTarg = rx_buff[buffer_index + 2] | (rx_buff[buffer_index + 3] << 8);
+      laser = rx_buff[buffer_index + 4];
+    }
+
+    buffer_index+= 8;
+    buffer_index %= UART_BUFFSIZE;
+
+    if(!flag){
+      xTarg = rx_buff[buffer_index] | (rx_buff[buffer_index + 1] << 8);
+      yTarg = rx_buff[buffer_index + 2] | (rx_buff[buffer_index + 3] << 8);
+      laser = rx_buff[buffer_index + 4];
+    }
   }
 }
 
@@ -297,7 +314,10 @@ void TIM6_manual_init(){
   TIM6->DIER |= TIM_DIER_UIE;
 }
 
-
+void TIM7_manual_init(){
+  TIM7->CR1 |= 1;
+  TIM7->DIER |= TIM_DIER_UIE;
+}
 
 /* USER CODE END 4 */
 

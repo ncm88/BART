@@ -56,6 +56,7 @@ void Error_Handler(void);
 void Decoder_Init(void);
 void PWM_Init(void);
 void TIM6_manual_init(void);
+void TIM7_manual_init(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
