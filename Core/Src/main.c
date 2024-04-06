@@ -42,8 +42,8 @@
 #define MOTOR2_DIR_Pin GPIO_PIN_11
 #define MOTOR2_DIR_GPIO_Port GPIOA
 #define ENCODER_RESOLUTION 48960
-#define CHUNK_SIZE 120
-#define UART_BUFFSIZE CHUNK_SIZE * 3
+#define CHUNK_SIZE 80
+#define UART_BUFFSIZE CHUNK_SIZE * 10
 
 #define ON 1
 #define OFF 0
@@ -77,13 +77,16 @@ float motor1_error_derivative, motor2_error_derivative;
 
 uint16_t xTarg, yTarg; //angular representation of target x and y cartesian coordinates
 uint8_t laser;
+uint8_t visited;
 int32_t deltaX, deltaY;
 int32_t xError, yError;
 int32_t last_x_error, last_y_error;
 
-uint8_t rx_buff[CHUNK_SIZE * 2] = {0};
-uint16_t buffer_index = 0;
-uint8_t flag;
+uint8_t rx_buff[UART_BUFFSIZE] = {0};
+
+int16_t buffer_index = -8;
+uint16_t point_index;
+uint16_t buffPos;
 
 /* USER CODE END PV */
 
@@ -141,13 +144,12 @@ int main(void)
   set_pd_gain(&pd_instance_mot2, KP, KD);
   TIM6_manual_init();
   TIM7_manual_init();
+  HAL_UART_Receive_DMA(&huart2, rx_buff, UART_BUFFSIZE);
   //INSERT CALIBRATION CODE HERE----------------------------------------
-
   xTarg = 0;
   yTarg = 0;
   laser = OFF;
   //----------------------------------------------------------------------
-  HAL_UART_Receive_DMA(&huart2, rx_buff, CHUNK_SIZE);
 
   /* USER CODE END 2 */
 
@@ -155,7 +157,6 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -163,7 +164,6 @@ int main(void)
   }
   /* USER CODE END 3 */
 }
-
 
 /**
   * @brief System Clock Configuration
@@ -266,21 +266,18 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){   //predefined func
   }
 
   else if(htim->Instance == TIM7){
-    flag = (buffer_index < UART_BUFFSIZE - 8);
-    
-    if(flag){
-      xTarg = rx_buff[buffer_index] | (rx_buff[buffer_index + 1] << 8);
-      yTarg = rx_buff[buffer_index + 2] | (rx_buff[buffer_index + 3] << 8);
-      laser = rx_buff[buffer_index + 4];
+    buffer_index += 8;
+    if (buffer_index >= UART_BUFFSIZE) {
+      buffer_index -= UART_BUFFSIZE;  // Wrap around explicitly without waiting for the next interrupt
     }
-
-    buffer_index+= 8;
-    buffer_index %= UART_BUFFSIZE;
-
-    if(!flag){
+    buffPos = buffer_index / 8;
+    visited = rx_buff[buffer_index + 7];
+    if((buffer_index < UART_BUFFSIZE - 7) && !visited){
       xTarg = rx_buff[buffer_index] | (rx_buff[buffer_index + 1] << 8);
       yTarg = rx_buff[buffer_index + 2] | (rx_buff[buffer_index + 3] << 8);
       laser = rx_buff[buffer_index + 4];
+      point_index = rx_buff[buffer_index + 5] | (rx_buff[buffer_index + 6] << 8);
+      rx_buff[buffer_index + 7] |= 0x1;
     }
   }
 }
@@ -313,6 +310,7 @@ void TIM6_manual_init(){
   TIM6->CR1 |= 1;
   TIM6->DIER |= TIM_DIER_UIE;
 }
+
 
 void TIM7_manual_init(){
   TIM7->CR1 |= 1;
