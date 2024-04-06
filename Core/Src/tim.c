@@ -166,9 +166,9 @@ void MX_TIM7_Init(void)
 
   /* USER CODE END TIM7_Init 1 */
   htim7.Instance = TIM7;
-  htim7.Init.Prescaler = 9;
+  htim7.Init.Prescaler = 0;
   htim7.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim7.Init.Period = 7999;
+  htim7.Init.Period = 799;
   htim7.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim7) != HAL_OK)
   {
