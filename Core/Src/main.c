@@ -34,9 +34,9 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define KP 0.24
-#define KD 0.161
-#define SAMPLE_RATE 100
+#define KP 8.4
+#define KD 0.28175
+#define SAMPLE_RATE 2000
 #define MOTOR1_DIR_Pin GPIO_PIN_10
 #define MOTOR1_DIR_GPIO_Port GPIOA
 #define MOTOR2_DIR_Pin GPIO_PIN_11
@@ -51,8 +51,6 @@
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
-#define ABS_ANGLE(A, RES) ((A >= 0)? A : RES + A)
-#define SIGNED_ANGLE(A, RES) ((A > (RES / 2)) ? (A - RES) : (A)) //FOR VISUALIZATION PURPOSES
 #define ARC_VECTOR(TARGET, CURRENT) \
     ((((TARGET - CURRENT) + ENCODER_RESOLUTION) % ENCODER_RESOLUTION <= ENCODER_RESOLUTION / 2) ? \
         ((TARGET - CURRENT) + ENCODER_RESOLUTION) % ENCODER_RESOLUTION : \
@@ -62,15 +60,21 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-static pd_instance_int16 pd_instance_mot1, pd_instance_mot2;
+enum{
+  IDLE,
+  HOMING,
+  RUNNING
+}BART_STATE;
+
+uint8_t system_homed = 0;
+
+pd_instance_int16 pd_instance_mot1, pd_instance_mot2;
 moving_avg_obj filter_instance1, filter_instance2;
 
 int32_t xPos;
-int32_t xCurrErr;
 int32_t xOutput;
 
 int32_t yPos;
-int32_t yCurrErr;
 int32_t yOutput;
 
 float motor1_error_derivative, motor2_error_derivative;
@@ -138,6 +142,7 @@ int main(void)
   MX_TIM6_Init();
   MX_TIM7_Init();
   /* USER CODE BEGIN 2 */
+  
   Decoder_Init();
   PWM_Init();
   set_pd_gain(&pd_instance_mot1, KP, KD);
@@ -145,10 +150,13 @@ int main(void)
   TIM6_manual_init();
   TIM7_manual_init();
   HAL_UART_Receive_DMA(&huart2, rx_buff, UART_BUFFSIZE);
+  //USART2->CR1 &= USART_CR1_RXNEIE;
+
   //INSERT CALIBRATION CODE HERE----------------------------------------
   xTarg = 0;
   yTarg = 0;
   laser = OFF;
+  BART_STATE = RUNNING;
   //----------------------------------------------------------------------
 
   /* USER CODE END 2 */
@@ -157,6 +165,14 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+    
+    xPos = __HAL_TIM_GET_COUNTER(&htim2);
+    yPos = __HAL_TIM_GET_COUNTER(&htim3);
+
+    xOutput = pd_instance_mot1.output;
+    yOutput = pd_instance_mot2.output;
+    
+    
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -164,6 +180,7 @@ int main(void)
   }
   /* USER CODE END 3 */
 }
+
 
 /**
   * @brief System Clock Configuration
@@ -201,87 +218,80 @@ void SystemClock_Config(void)
   }
 }
 
-/* USER CODE BEGIN 4 */
 
+
+/* USER CODE BEGIN 4 */
 
 //motor 1: encoder-htim2, output-htim16
 //motor 2: encoder-htim3, output-htim17
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){   //predefined function override
-  if(htim->Instance == TIM6){
+  
+  if(BART_STATE == RUNNING){
+    if(htim->Instance == TIM6){
     
-    if(laser == ON){
-       HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_SET); 
+      if(laser == ON){
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_SET); 
+      }
+      
+      else{
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_RESET); 
+      }
+
+      xError = ARC_VECTOR(xTarg, __HAL_TIM_GET_COUNTER(&htim2)); //action channel
+      yError = ARC_VECTOR(yTarg, __HAL_TIM_GET_COUNTER(&htim3));
+      
+      //get error delta
+      deltaX = xError - last_x_error;
+      deltaY = yError - last_y_error;
+
+      //filter on error delta
+      apply_average_filter(&filter_instance1, deltaX, &motor1_error_derivative);
+      apply_average_filter(&filter_instance2, deltaY, &motor2_error_derivative);
+
+      // pd apply
+      apply_pd(&pd_instance_mot1, xError, motor1_error_derivative, SAMPLE_RATE);
+      apply_pd(&pd_instance_mot2, yError, motor2_error_derivative, SAMPLE_RATE);
+
+      // PWM
+      if(pd_instance_mot1.output > 0){
+        __HAL_TIM_SET_COMPARE(&htim16, TIM_CHANNEL_1, pd_instance_mot1.output);
+        HAL_GPIO_WritePin(MOTOR1_DIR_GPIO_Port, MOTOR1_DIR_Pin, GPIO_PIN_SET);
+      }
+      else{
+        __HAL_TIM_SET_COMPARE(&htim16, TIM_CHANNEL_1, (-1) * pd_instance_mot1.output);
+        HAL_GPIO_WritePin(MOTOR1_DIR_GPIO_Port, MOTOR1_DIR_Pin, GPIO_PIN_RESET);
+      }
+
+      if(pd_instance_mot2.output > 0){
+        __HAL_TIM_SET_COMPARE(&htim17, TIM_CHANNEL_1, pd_instance_mot2.output);    //GONNA NEED TO FIX THIS MOST LIKELY
+        HAL_GPIO_WritePin(MOTOR2_DIR_GPIO_Port, MOTOR2_DIR_Pin, GPIO_PIN_SET);
+      }
+      else{
+        __HAL_TIM_SET_COMPARE(&htim17, TIM_CHANNEL_1, (-1) * pd_instance_mot2.output);
+        HAL_GPIO_WritePin(MOTOR2_DIR_GPIO_Port, MOTOR2_DIR_Pin, GPIO_PIN_RESET);
+      }
+      
+      last_x_error = xError;
+      last_y_error = yError;
     }
-    
-    else{
-      HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_RESET); 
-    }
 
-    //get position error
-    xPos = SIGNED_ANGLE(__HAL_TIM_GET_COUNTER(&htim2), ENCODER_RESOLUTION); //action channel
-    yPos = SIGNED_ANGLE(__HAL_TIM_GET_COUNTER(&htim3), ENCODER_RESOLUTION);
-
-    xError = ARC_VECTOR(ABS_ANGLE(xTarg, ENCODER_RESOLUTION), __HAL_TIM_GET_COUNTER(&htim2)); //action channel
-    yError = ARC_VECTOR(ABS_ANGLE(yTarg, ENCODER_RESOLUTION), __HAL_TIM_GET_COUNTER(&htim3));
-
-    xCurrErr = xError;
-    yCurrErr = yError;
-    
-    //get error delta
-    deltaX = xError - last_x_error;
-    deltaY = yError - last_y_error;
-
-    //filter on error delta
-    apply_average_filter(&filter_instance1, deltaX, &motor1_error_derivative);
-    apply_average_filter(&filter_instance2, deltaY, &motor2_error_derivative);
-
-		// pd apply
-		apply_pd(&pd_instance_mot1, xError, motor1_error_derivative, SAMPLE_RATE);
-    apply_pd(&pd_instance_mot2, yError, motor2_error_derivative, SAMPLE_RATE);
-
-    xOutput = pd_instance_mot1.output;
-    yOutput = pd_instance_mot2.output;
-
-    // PWM
-		if(pd_instance_mot1.output > 0){
-			__HAL_TIM_SET_COMPARE(&htim16, TIM_CHANNEL_1, pd_instance_mot1.output);
-			HAL_GPIO_WritePin(MOTOR1_DIR_GPIO_Port, MOTOR1_DIR_Pin, GPIO_PIN_SET);
-		}
-    else{
-      __HAL_TIM_SET_COMPARE(&htim16, TIM_CHANNEL_1, (-1) * pd_instance_mot1.output);
-		  HAL_GPIO_WritePin(MOTOR1_DIR_GPIO_Port, MOTOR1_DIR_Pin, GPIO_PIN_RESET);
-		}
-
-		if(pd_instance_mot2.output > 0){
-			__HAL_TIM_SET_COMPARE(&htim17, TIM_CHANNEL_1, pd_instance_mot2.output);    //GONNA NEED TO FIX THIS MOST LIKELY
-			HAL_GPIO_WritePin(MOTOR2_DIR_GPIO_Port, MOTOR2_DIR_Pin, GPIO_PIN_SET);
-		}
-    else{
-      __HAL_TIM_SET_COMPARE(&htim17, TIM_CHANNEL_1, (-1) * pd_instance_mot2.output);
-		  HAL_GPIO_WritePin(MOTOR2_DIR_GPIO_Port, MOTOR2_DIR_Pin, GPIO_PIN_RESET);
-		}
-    
-    last_x_error = xError;
-    last_y_error = yError;
-  }
-
-  else if(htim->Instance == TIM7){
-    buffer_index += 8;
-    if (buffer_index >= UART_BUFFSIZE) {
-      buffer_index -= UART_BUFFSIZE;  // Wrap around explicitly without waiting for the next interrupt
-    }
-    buffPos = buffer_index / 8;
-    visited = rx_buff[buffer_index + 5];
-    if((buffer_index < UART_BUFFSIZE - 7) && !visited){
-      xTarg = rx_buff[buffer_index] | (rx_buff[buffer_index + 1] << 8);
-      yTarg = rx_buff[buffer_index + 2] | (rx_buff[buffer_index + 3] << 8);
-      laser = rx_buff[buffer_index + 4];
-      rx_buff[buffer_index + 5] |= 0x1; //mark this point byte as visited
-      point_index = rx_buff[buffer_index + 6] | (rx_buff[buffer_index + 7] << 8);
+    else if(htim->Instance == TIM7){
+      buffer_index += 8;
+      if (buffer_index >= UART_BUFFSIZE) {
+        buffer_index -= UART_BUFFSIZE;  // Wrap around explicitly without waiting for the next interrupt
+      }
+      buffPos = buffer_index / 8;
+      visited = rx_buff[buffer_index + 5];
+      if((buffer_index < UART_BUFFSIZE - 7) && !visited){
+        xTarg = rx_buff[buffer_index] | (rx_buff[buffer_index + 1] << 8);
+        yTarg = rx_buff[buffer_index + 2] | (rx_buff[buffer_index + 3] << 8);
+        laser = rx_buff[buffer_index + 4];
+        rx_buff[buffer_index + 5] |= 0x1; //mark this byte as visited
+        point_index = rx_buff[buffer_index + 6] | (rx_buff[buffer_index + 7] << 8);
+      }
     }
   }
 }
-
 
 
 void Decoder_Init(void){
@@ -316,6 +326,26 @@ void TIM7_manual_init(){
   TIM7->CR1 |= 1;
   TIM7->DIER |= TIM_DIER_UIE;
 }
+
+/*
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
+  if(!system_homed && (huart->Instance = USART2)){
+    BART_STATE = HOMING;
+    volatile uint8_t data = USART2->RDR; //clear RDR interrupt flag register
+    USART2->CR1 &= ~USART_CR1_RXNEIE; //Disable subsequent USART interrupts
+  } 
+}
+*/
+
+
+
+void homer_subroutine(void){
+  if(!system_homed){
+    system_homed = 1;
+    BART_STATE = RUNNING;
+  }
+}
+
 
 /* USER CODE END 4 */
 
