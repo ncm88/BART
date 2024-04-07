@@ -43,7 +43,7 @@
 #define MOTOR2_DIR_GPIO_Port GPIOA
 #define ENCODER_RESOLUTION 48960
 #define CHUNK_SIZE 16
-#define UART_BUFFSIZE CHUNK_SIZE * 2
+#define UART_BUFFSIZE CHUNK_SIZE * 3
 
 #define ON 1
 #define OFF 0
@@ -271,13 +271,13 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){   //predefined func
       buffer_index -= UART_BUFFSIZE;  // Wrap around explicitly without waiting for the next interrupt
     }
     buffPos = buffer_index / 8;
-    visited = rx_buff[buffer_index + 7];
+    visited = rx_buff[buffer_index + 5];
     if((buffer_index < UART_BUFFSIZE - 7) && !visited){
       xTarg = rx_buff[buffer_index] | (rx_buff[buffer_index + 1] << 8);
       yTarg = rx_buff[buffer_index + 2] | (rx_buff[buffer_index + 3] << 8);
       laser = rx_buff[buffer_index + 4];
-      point_index = rx_buff[buffer_index + 5] | (rx_buff[buffer_index + 6] << 8);
-      rx_buff[buffer_index + 7] |= 0x1;
+      rx_buff[buffer_index + 5] |= 0x1; //mark this point byte as visited
+      point_index = rx_buff[buffer_index + 6] | (rx_buff[buffer_index + 7] << 8);
     }
   }
 }
