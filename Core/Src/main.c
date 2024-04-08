@@ -34,8 +34,8 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define KP 13
-#define KD 0.73
+#define KP 18.5
+#define KD 0.6
 #define SAMPLE_RATE 1000
 #define MOTOR1_DIR_Pin GPIO_PIN_10
 #define MOTOR1_DIR_GPIO_Port GPIOA
@@ -51,6 +51,7 @@
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
+#define SIGNED_ANGLE(A, RES) ((A > (RES / 2)) ? (A - RES) : (A)) //FOR VISUALIZATION PURPOSES
 #define ARC_VECTOR(TARGET, CURRENT) \
     ((((TARGET - CURRENT) + ENCODER_RESOLUTION) % ENCODER_RESOLUTION <= ENCODER_RESOLUTION / 2) ? \
         ((TARGET - CURRENT) + ENCODER_RESOLUTION) % ENCODER_RESOLUTION : \
@@ -91,6 +92,9 @@ uint8_t rx_buff[UART_BUFFSIZE] = {0};
 int16_t buffer_index = -8;
 uint16_t point_index;
 uint16_t buffPos;
+
+int16_t xTargTracker;
+int16_t yTargTracker;
 
 /* USER CODE END PV */
 
@@ -167,8 +171,11 @@ int main(void)
   {
     //if(BART_STATE == HOMING) homer_subroutine();
 
-    xPos = __HAL_TIM_GET_COUNTER(&htim2);
-    yPos = __HAL_TIM_GET_COUNTER(&htim3);
+    xPos = SIGNED_ANGLE(__HAL_TIM_GET_COUNTER(&htim2), ENCODER_RESOLUTION);
+    yPos = SIGNED_ANGLE(__HAL_TIM_GET_COUNTER(&htim3), ENCODER_RESOLUTION);
+
+    xTargTracker = SIGNED_ANGLE(xTarg, ENCODER_RESOLUTION);
+    yTargTracker = SIGNED_ANGLE(yTarg, ENCODER_RESOLUTION);
 
     xOutput = pd_instance_mot1.output;
     yOutput = pd_instance_mot2.output;
