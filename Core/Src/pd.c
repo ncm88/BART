@@ -1,6 +1,6 @@
 #include "pd.h"
 
-#define PD_MAX  3999
+#define PD_MAX  7999
 #define RESOLUTION 48960
 
 #define ABS(A) (A >= 0)? (A) : ((-1) * (A))

@@ -34,9 +34,9 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define KP 8.4
-#define KD 0.28175
-#define SAMPLE_RATE 2000
+#define KP 13
+#define KD 0.73
+#define SAMPLE_RATE 1000
 #define MOTOR1_DIR_Pin GPIO_PIN_10
 #define MOTOR1_DIR_GPIO_Port GPIOA
 #define MOTOR2_DIR_Pin GPIO_PIN_11
@@ -150,7 +150,7 @@ int main(void)
   TIM6_manual_init();
   TIM7_manual_init();
   HAL_UART_Receive_DMA(&huart2, rx_buff, UART_BUFFSIZE);
-  //USART2->CR1 &= USART_CR1_RXNEIE;
+  //USART2->CR1 |= USART_CR1_RXNEIE;
 
   //INSERT CALIBRATION CODE HERE----------------------------------------
   xTarg = 0;
@@ -165,7 +165,8 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    
+    //if(BART_STATE == HOMING) homer_subroutine();
+
     xPos = __HAL_TIM_GET_COUNTER(&htim2);
     yPos = __HAL_TIM_GET_COUNTER(&htim3);
 
@@ -180,7 +181,6 @@ int main(void)
   }
   /* USER CODE END 3 */
 }
-
 
 /**
   * @brief System Clock Configuration
@@ -217,8 +217,6 @@ void SystemClock_Config(void)
     Error_Handler();
   }
 }
-
-
 
 /* USER CODE BEGIN 4 */
 
@@ -327,6 +325,7 @@ void TIM7_manual_init(){
   TIM7->DIER |= TIM_DIER_UIE;
 }
 
+
 /*
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
   if(!system_homed && (huart->Instance = USART2)){
@@ -336,6 +335,8 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
   } 
 }
 */
+
+
 
 
 
