@@ -41,6 +41,13 @@
 #define MOTOR1_DIR_GPIO_Port GPIOA
 #define MOTOR2_DIR_Pin GPIO_PIN_11
 #define MOTOR2_DIR_GPIO_Port GPIOA
+
+#define LIMIT_SWITCH_1_PIN GPIO_PIN_1
+#define LIMIT_SWITCH_2_PIN GPIO_PIN_3
+#define LIMIT_SWITCH_ANGLE_DEG 90
+#define HOMING_SET_VALUE (LIMIT_SWITCH_ANGLE_DEG / 360 * ENCODER_RESOLUTION)
+#define HOMING_POWER_RATIO 0.2
+
 #define ENCODER_RESOLUTION 48960
 #define CHUNK_SIZE 16
 #define UART_BUFFSIZE CHUNK_SIZE * 3
@@ -62,12 +69,10 @@
 
 /* USER CODE BEGIN PV */
 enum{
-  IDLE,
   HOMING,
-  RUNNING
+  RUNNING,
+  ERROR_STATE
 }BART_STATE;
-
-uint8_t system_homed = 0;
 
 pd_instance_int16 pd_instance_mot1, pd_instance_mot2;
 moving_avg_obj filter_instance1, filter_instance2;
@@ -91,7 +96,9 @@ uint8_t rx_buff[UART_BUFFSIZE] = {0};
 
 int16_t buffer_index = -8;
 uint16_t point_index;
-uint16_t buffPos;
+
+uint8_t x_homed;
+uint8_t y_homed;
 
 int16_t xTargTracker;
 int16_t yTargTracker;
@@ -153,15 +160,15 @@ int main(void)
   set_pd_gain(&pd_instance_mot2, KP, KD);
   TIM6_manual_init();
   TIM7_manual_init();
-  HAL_UART_Receive_DMA(&huart2, rx_buff, UART_BUFFSIZE);
-  //USART2->CR1 |= USART_CR1_RXNEIE;
+  HAL_UART_Receive_DMA(&huart2, rx_buff, UART_BUFFSIZE); //Establish continuous UART DMA
 
   //INSERT CALIBRATION CODE HERE----------------------------------------
-  xTarg = 0;
-  yTarg = 0;
-  laser = OFF;
-  BART_STATE = RUNNING;
+  x_homed = 0;
+  y_homed = 0;
+  BART_STATE = HOMING;
   //----------------------------------------------------------------------
+
+  homer_subroutine();
 
   /* USER CODE END 2 */
 
@@ -169,7 +176,11 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    //if(BART_STATE == HOMING) homer_subroutine();
+    if(BART_STATE == HOMING){ //redundancy for any interrupt-triggered homing that needs to be added in the future
+      x_homed = 0;
+      y_homed = 0;
+      homer_subroutine();
+    }
 
     xPos = SIGNED_ANGLE(__HAL_TIM_GET_COUNTER(&htim2), ENCODER_RESOLUTION);
     yPos = SIGNED_ANGLE(__HAL_TIM_GET_COUNTER(&htim3), ENCODER_RESOLUTION);
@@ -229,7 +240,7 @@ void SystemClock_Config(void)
 
 //motor 1: encoder-htim2, output-htim16
 //motor 2: encoder-htim3, output-htim17
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){   //predefined function override
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){   
   
   if(BART_STATE == RUNNING){
     if(htim->Instance == TIM6){
@@ -242,7 +253,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){   //predefined func
         HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_RESET); 
       }
 
-      xError = ARC_VECTOR(xTarg, __HAL_TIM_GET_COUNTER(&htim2)); //action channel
+      xError = ARC_VECTOR(xTarg, __HAL_TIM_GET_COUNTER(&htim2)); 
       yError = ARC_VECTOR(yTarg, __HAL_TIM_GET_COUNTER(&htim3));
       
       //get error delta
@@ -285,7 +296,6 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){   //predefined func
       if (buffer_index >= UART_BUFFSIZE) {
         buffer_index -= UART_BUFFSIZE;  // Wrap around explicitly without waiting for the next interrupt
       }
-      buffPos = buffer_index / 8;
       visited = rx_buff[buffer_index + 5];
       if((buffer_index < UART_BUFFSIZE - 7) && !visited){
         xTarg = rx_buff[buffer_index] | (rx_buff[buffer_index + 1] << 8);
@@ -297,6 +307,50 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){   //predefined func
     }
   }
 }
+
+
+void homer_subroutine(void){ //technically it should be more precise to home the motors one by one but this way looks cooler 
+    laser = OFF;
+    xTarg = 0;
+    yTarg = 0;
+    
+    if(!x_homed){
+      __HAL_TIM_SET_COMPARE(&htim16, TIM_CHANNEL_1, HOMING_POWER_RATIO* PD_MAX);
+    }
+    
+    if(!y_homed){
+      __HAL_TIM_SET_COMPARE(&htim17, TIM_CHANNEL_1, HOMING_POWER_RATIO * PD_MAX);
+    }
+    
+    while(!x_homed || !y_homed)
+    {
+    }
+
+    BART_STATE = RUNNING;
+}
+
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
+  uint32_t primask = __get_PRIMASK();
+  __disable_irq();
+  
+  if(GPIO_Pin == LIMIT_SWITCH_1_PIN){
+    TIM2->CNT &= 0x0;
+    TIM2->CNT |= HOMING_SET_VALUE;
+    __HAL_TIM_SET_COMPARE(&htim16, TIM_CHANNEL_1, 0);
+    x_homed = 1;
+  }
+
+  else if(GPIO_Pin == LIMIT_SWITCH_2_PIN){
+    TIM3->CNT &= 0x0;
+    TIM3->CNT |= HOMING_SET_VALUE;
+    __HAL_TIM_SET_COMPARE(&htim17, TIM_CHANNEL_1, 0);
+    y_homed = 1;
+  }
+
+  __set_PRIMASK(primask);
+}
+
 
 
 void Decoder_Init(void){
@@ -333,27 +387,6 @@ void TIM7_manual_init(){
 }
 
 
-/*
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
-  if(!system_homed && (huart->Instance = USART2)){
-    BART_STATE = HOMING;
-    volatile uint8_t data = USART2->RDR; //clear RDR interrupt flag register
-    USART2->CR1 &= ~USART_CR1_RXNEIE; //Disable subsequent USART interrupts
-  } 
-}
-*/
-
-
-
-
-
-void homer_subroutine(void){
-  if(!system_homed){
-    system_homed = 1;
-    BART_STATE = RUNNING;
-  }
-}
-
 
 /* USER CODE END 4 */
 
@@ -366,6 +399,7 @@ void Error_Handler(void)
   /* USER CODE BEGIN Error_Handler_Debug */
   /* User can add his own implementation to report the HAL error return state */
   __disable_irq();
+  BART_STATE = ERROR_STATE;
   while (1)
   {
   }

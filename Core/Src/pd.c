@@ -1,9 +1,8 @@
 #include "pd.h"
 
-#define PD_MAX  7999
-#define RESOLUTION 48960
-
 #define ABS(A) (A >= 0)? (A) : ((-1) * (A))
+
+
 
 void set_pd_gain(pd_instance_int16* pd, float p, float d)
 {

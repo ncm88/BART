@@ -3,6 +3,9 @@
 
 #include<stdint.h>
 
+#define PD_MAX  7999
+#define RESOLUTION 48960
+
 typedef struct
 {
 	float p_gain;
