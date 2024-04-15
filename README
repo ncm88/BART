@@ -1,0 +1,5 @@
+# Bi-Axial Realtime Transcription (BART)
+
+## Brief
+BART is a small-scale laser projector using two mirrors actuated by a pair of brushed DC motors. This repository contains all source code for BART as well as its sister application LISA (Laser Image Streaming Application)
+

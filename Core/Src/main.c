@@ -58,7 +58,7 @@
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
-#define SIGNED_ANGLE(A, RES) ((A > (RES / 2)) ? (A - RES) : (A)) //FOR VISUALIZATION PURPOSES
+#define SIGNED_ANGLE(A, RES) ((A > (RES / 2)) ? (A - RES) : (A)) 
 #define ARC_VECTOR(TARGET, CURRENT) \
     ((((TARGET - CURRENT) + ENCODER_RESOLUTION) % ENCODER_RESOLUTION <= ENCODER_RESOLUTION / 2) ? \
         ((TARGET - CURRENT) + ENCODER_RESOLUTION) % ENCODER_RESOLUTION : \
@@ -238,8 +238,10 @@ void SystemClock_Config(void)
 
 /* USER CODE BEGIN 4 */
 
-//motor 1: encoder-htim2, output-htim16
-//motor 2: encoder-htim3, output-htim17
+/**
+ * @brief Timer overflow interrupt callback
+ * @details Applies PD on timer 6 overflow, updates UART buffer entry on timer 7 overflow
+*/
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){   
   
   if(BART_STATE == RUNNING){
@@ -264,11 +266,11 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
       apply_average_filter(&filter_instance1, deltaX, &motor1_error_derivative);
       apply_average_filter(&filter_instance2, deltaY, &motor2_error_derivative);
 
-      // pd apply
+      // apply PD
       apply_pd(&pd_instance_mot1, xError, motor1_error_derivative, SAMPLE_RATE);
       apply_pd(&pd_instance_mot2, yError, motor2_error_derivative, SAMPLE_RATE);
 
-      // PWM
+      // PWM and direction control
       if(pd_instance_mot1.output > 0){
         __HAL_TIM_SET_COMPARE(&htim16, TIM_CHANNEL_1, pd_instance_mot1.output);
         HAL_GPIO_WritePin(MOTOR1_DIR_GPIO_Port, MOTOR1_DIR_Pin, GPIO_PIN_SET);
@@ -279,7 +281,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
       }
 
       if(pd_instance_mot2.output > 0){
-        __HAL_TIM_SET_COMPARE(&htim17, TIM_CHANNEL_1, pd_instance_mot2.output);    //GONNA NEED TO FIX THIS MOST LIKELY
+        __HAL_TIM_SET_COMPARE(&htim17, TIM_CHANNEL_1, pd_instance_mot2.output);    
         HAL_GPIO_WritePin(MOTOR2_DIR_GPIO_Port, MOTOR2_DIR_Pin, GPIO_PIN_SET);
       }
       else{
@@ -309,13 +311,12 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 }
 
 
-void homer_subroutine(void){ //technically it should be more precise to home the motors one by one but this way looks cooler 
+//Turn mirrors until limit switch is hit
+void homer_subroutine(void){ 
     laser = OFF;
-    xTarg = 0;
-    yTarg = 0;
     
     if(!x_homed){
-      __HAL_TIM_SET_COMPARE(&htim16, TIM_CHANNEL_1, HOMING_POWER_RATIO* PD_MAX);
+      __HAL_TIM_SET_COMPARE(&htim16, TIM_CHANNEL_1, HOMING_POWER_RATIO * PD_MAX);
     }
     
     if(!y_homed){
@@ -330,6 +331,7 @@ void homer_subroutine(void){ //technically it should be more precise to home the
 }
 
 
+//Limit switch interrupt which triggers when limit switch pins are pulled low
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
   uint32_t primask = __get_PRIMASK();
   __disable_irq();
@@ -353,6 +355,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
 
 
 
+//Low-level initializatiion to bypass HAL unreliability
 void Decoder_Init(void){
   TIM2->CR1 |= TIM_CR1_CEN;
   TIM2->CR1 |= TIM_CR1_ARPE;
