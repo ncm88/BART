@@ -135,7 +135,7 @@ An example showing the controller in action while drawing a square is provided b
 
 
 ## Homing
-If the system state is set to `HOMING` (as it is during initialization), `homer_subroutine()` is automatically called. This subroutine slowly turns both mirrors until they hit their respective limit switches. When a limit switch is hit, the corresponding interrupt pin is pulled low and an interrupt is triggered which sets either the `x_homed` or `y_homed` values to `true` as well as setting the `CNT` register of that given position counter to the given limit switch's angular offset value. 
+If the system state is set to `HOMING` (as it is during initialization), `homer_subroutine()` is automatically called. This subroutine slowly turns both mirrors until they hit their respective limit switches. When a limit switch is hit, the corresponding interrupt pin is pulled low and an interrupt is triggered which sets either the `x_homed` or `y_homed` values to `true` as well as setting the `CNT` register of that given position counter to the given limit switch's angular offset value. When both `x_homed` and `y_homed` values are true, `xTarg` and `yTarg` are set to 0 (where 0 denotes the position by which the laser is reflected out normal to the front face of the device) and the system state is set to `RUNNING`. From here, the device moves its mirrors to the central position and awaits point data sent over the UART connection. 
 
 
 ## Pinout
@@ -162,7 +162,7 @@ A four-layer PCB is used in the final version of the system. The PCB schematic i
 
 <img src="images/schematic.png" alt="PCB schematic" width="1000" height="500"><br>
 
-An LN298 H-bridge is used and the microcontroller's outgoing signals to the H-bridge are isolated via optocoupler. This is done to protect the MCU from transients which were observed in testing to be emitting from the H-bridge during changes of direction.
+An LN298 H-bridge is used and the microcontroller's outgoing signals to the H-bridge are isolated via optocoupler. This was done to protect the MCU from transients which were observed in testing to be emitting from the H-bridge during changes of direction.
 
 
 <div style="display: flex; justify-content: space-around; align-items: center;">
