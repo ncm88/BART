@@ -1,7 +1,9 @@
 # Bi-Axial Realtime Transcription (BART)
 
-<img src="images/IMG_0249.gif" alt="test video" width="300" height="400">
-<img src="images/trianglecapture.png" alt="test shape" width="300" height="300">
+<div style="display: flex; justify-content: space-around; align-items: center;">
+   <img src="images/IMG_0249.gif" alt="test video" width="300" height="400">
+   <img src="images/trianglecapture.png" alt="test shape" width="300" height="300">
+</div>
 
 ## Brief
 BART is a simple laser projector using two mirrors actuated by a pair of brushed DC motors. This repository contains all source code for BART as well as its sister application, [LISA](https://github.com/ncm88/LISA/) (any Simpsons reference is purely coincidental).
@@ -11,7 +13,7 @@ BART is a simple laser projector using two mirrors actuated by a pair of brushed
 
 ## System Overview
 The following state diagram describes the device's operation: <br>
-<img src="images/statediagram.drawio.png" alt="state diagram" width="1000" height="400">
+<img src="images/statediagram.drawio.png" alt="state diagram" width="1000" height="300">
 
 Upon startup, the device is homed via the "homer" subroutine (once again, any Simpsons reference is purely coincidental) after which it awaits further drawing instructions in the `RUNNING` state. The `ERROR` state is activated upon any error raised by any of the HAL functions during execution to aid in debugging purposes.
 
@@ -52,14 +54,14 @@ Upon startup, the device is homed via the "homer" subroutine (once again, any Si
      yCoord = yCoord - (angular_resolution * (yMaxAngleDeg / 360))
      ```
 
-#### 6. **Conversion to Absolute Positioning (if necessary):**
-   - Converts signed coordinates to absolute values if the laser hardware requires absolute angles (non-negative values only), ensuring compatibility with hardware that might not handle negative values directly.
+#### 6. **Conversion to Absolute Positioning:**
+   - Converts signed coordinates to absolute values for compatibility with BART's unsigned position tracking system. The magnitude of converted negative values is dependant on the quadrature encoder's resolution, which in the case of this device is 48960 ticks per motor shaft revolution.
 
 
 ### Example
 `python main.py datafiles/letters/7.ild /dev/tty.usbmodem1203 115200 1000 12`
 
-Here we see the points formatted to accomodate a maximum 12-degree offset in the X and Y directions. Note that this is before the signed to unsigned conversion occurs
+Here we see the points formatted to accomodate a maximum 12-degree offset in the X and Y directions. Note that this is before the signed to unsigned conversion occurs.
 <div style="display: flex; justify-content: space-around; align-items: center;">
   <img src="images/7raw.png" alt="raw points" width="300" height="300">
   <img src="images/7clean.png" alt="converted points" width="300" height="300">
@@ -100,8 +102,11 @@ However, it is important to note that with a simple controller like this, the ti
 
 ## Position Detection and Speed Control
 ### Position Detection
-Both motors have quadrature encoders mounted to them. `TIM2` and `TIM3` are configured to take two input channels feeding from the encoder. Each timer checks the state of both channels at the primary clock frequency of 8MHz, if channel 1 goes high before channel 2, the timer's `CNT` register value is incremented by one, if the opposite happens it is decremented by one. Each encoder has a resolution of 48960 ticks per revolution meaning each tick corresponds to approximately 0.00735 degrees of travel and we can use 16-bit unsigned integers to capture the full range of motion.
+Both motors have quadrature encoders mounted to them. `TIM2` and `TIM3` are configured to take two input channels each feeding from their respective motor's encoder. Each timer checks the state of both channels at the primary clock frequency of 8MHz, if channel 1 goes high before channel 2, the timer's `CNT` register value is incremented by one, if the opposite happens it is decremented by one. Each encoder has a resolution of 48960 ticks per revolution meaning each tick corresponds to approximately 0.00735 degrees of travel and we can use 16-bit unsigned integers to capture the full range of motion for each mirror.
 
+### Speed Control
+`TIM16` and `TIM17` are used to drive PWM signals in order to control the speed of their respective motors. Both timers tick at the central clock frequency of 8MHz and have a `CNT` buffer size of 8000. The PD controller passes each timer a value from 0 to 7999 in order to set the duty cycle of that timer's active high output channel for that given control cycle. This output channel controls its respective enable pin on the motor driver circuit's H-bridge, thereby controlling how much power the motor receives each control cycle where <br>
+`POWER_RATIO = 100/7999 * PD_OUTPUT`.
 
 
 ## PD Controller
@@ -120,11 +125,11 @@ The control cycle for each motor consists of the following steps:
 
 <img src="images/filtersignal.png" alt="filtered signal comparison" width="1000" height="400"> <br>
 <br>
-* 4: A PD output value is computed and mapped to a PWM speed signal (output magnitude) and a direction signal (output sign)
+* 4: A PD output value is computed and mapped to a PWM speed signal (PD output magnitude) and a direction signal (PD output sign)
 
 This control cycle occurs every time the register TIM6_CNT overflows, ensuring a hard real-time control frequency of 1kHz, however timer configurations can be modified such as to allow for control frequencies of up to 10kHz if required.
 
-An example showing the controller in action while drawing a square is shown below:
+An example showing the controller in action while drawing a square is provided below:
 
 <img src="images/squarecontcap.png" alt="square controller waveform tracking" width="1000" height="400">
 
@@ -157,7 +162,7 @@ A four-layer PCB is used in the final version of the system. The PCB schematic i
 
 <img src="images/schematic.png" alt="PCB schematic" width="1000" height="500"><br>
 
-An LN298 H-bridge is used and the microcontroller's outgoing signals to the H-bridge are isolated via optocoupler. This is done to protect the MCU from switching transients which were observed in testing to be emitted from the motors' power terminals during changes of direction.
+An LN298 H-bridge is used and the microcontroller's outgoing signals to the H-bridge are isolated via optocoupler. This is done to protect the MCU from transients which were observed in testing to be emitting from the H-bridge during changes of direction.
 
 
 <div style="display: flex; justify-content: space-around; align-items: center;">
