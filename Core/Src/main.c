@@ -49,7 +49,7 @@
 #define HOMING_POWER_RATIO 0.2
 
 #define ENCODER_RESOLUTION 48960
-#define CHUNK_SIZE 16
+#define CHUNK_SIZE 8
 #define UART_BUFFSIZE CHUNK_SIZE * 3
 
 #define ON 1
