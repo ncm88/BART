@@ -170,6 +170,3 @@ An LN298 H-bridge is used and the microcontroller's outgoing signals to the H-br
   <img src="images/spcb.png" alt="PCB post-solder" width="300" height="300">
 </div>
 
-
-## Advanced Design considerations
-[This Document](https://www.youtube.com/watch?v=dQw4w9WgXcQ) details all design considerations that were too advanced to be included in the .README
