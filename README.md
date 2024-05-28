@@ -158,7 +158,7 @@ BART uses an STM32F303K8 microcontroller, the pinout is as shown below: <br>
 
 
 ## PCB
-A four-layer PCB is used in the final version of the system. The PCB schematic is attached below:
+A two-layer PCB is used in the final version of the system. The PCB schematic is attached below:
 
 <img src="images/schematic.png" alt="PCB schematic" width="1000" height="500"><br>
 
