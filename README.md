@@ -27,7 +27,7 @@ Upon startup, the device is homed via the "homer" subroutine (once again, any Si
 
 ### Step-by-Step Process
 
-#### 1. **Finding Extremes:**
+#### 1. **Finding Extrema:**
    - Identifies the minimum and maximum values (`minX`, `maxX`, `minY`, `maxY`) for both x and y coordinates among all points, defining the bounding rectangle of all points in the raw data.
 
 #### 2. **Calculating Travel Range:**
@@ -111,7 +111,7 @@ Both motors have quadrature encoders mounted to them. `TIM2` and `TIM3` are conf
 
 ## PD Controller
 ### Why PD Was Chosen
-PD control was chosen due to the rate at which directions change in the device (up to 1000 times per second). As such, introducing an I-term was shown to add too much phase lag to the controller and had very little use otherwise as at a rate of 1000 points/second there is very little time to rectify stead-state error in the system to begin with.
+PD control was chosen due to the rate at which directions change in the device (up to 1000 times per second). As such, introducing an I-term was shown to add too much phase lag to the controller and had very little use otherwise as at a rate of 1000 points/second there is very little time to rectify steady-state error in the system to begin with.
 
 ### PD Control Cycle
 The control cycle for each motor consists of the following steps:
